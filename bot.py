@@ -164,7 +164,7 @@ async def text_handler(message: types.Message):
         try:
             await bot.send_message(
                 user_id,
-                f"🔐 ВАШ КОД:\n\n{code}\n\n📥 Заявка #{order_id}"
+                f"🔐 Ваш код: {code}"
             )
         except:
             return await message.answer("❌ Не удалось отправить код клиенту")
@@ -283,7 +283,8 @@ async def take(call: types.CallbackQuery):
     )
 
     await call.answer("Взял в работу ❤️")
-    await call.message.edit_text(call.message.text + "\n\n🟢 В РАБОТЕ")
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer("Заявка принята🔥")
 
 # ===== REQUEST CODE =====
 @dp.callback_query(F.data.startswith("request_code_"))
@@ -303,7 +304,7 @@ async def request_code(call: types.CallbackQuery):
     worker_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="📤 SEND CODE",
+                text="📥 Отправить код",
                 callback_data=f"send_code_{order_id}"
             )
         ]
