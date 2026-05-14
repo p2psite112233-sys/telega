@@ -303,6 +303,79 @@ async def lk_buttons(call: types.CallbackQuery):
         )
         return await call.answer()
 
+    if call.data == "client_profile":
+        uid = call.from_user.id
+        username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
+        balance = get_balance(uid)
+
+        # Статистика из БД
+        closed = cur.execute(
+            "SELECT COUNT(*) FROM orders WHERE user_id=? AND status='DONE'", (uid,)
+        ).fetchone()[0]
+        active = cur.execute(
+            "SELECT COUNT(*) FROM orders WHERE user_id=? AND status='IN_PROGRESS'", (uid,)
+        ).fetchone()[0]
+        paid_count = cur.execute(
+            "SELECT COUNT(*) FROM invoices WHERE user_id=? AND status='paid'", (uid,)
+        ).fetchone()[0]
+
+        text = (
+            f"👤 Профиль клиента\n"
+            f"Ваш профиль: {username} [{uid}]\n\n"
+            f"💼 Финансы\n"
+            f"• Доступно на балансе: {balance:.2f} USDT\n"
+            f"• Заморожено в заявках: 0.00 USDT\n\n"
+            f"📊 Статистика\n"
+            f"• Закрыто заявок: {closed} шт\n"
+            f"• Активных заявок: {active} шт\n"
+            f"• Объем закрытых заявок: 0.00 USDT\n"
+            f"• Возвращено после споров: 0.00 USDT\n"
+            f"• Приглашено по ссылке: 0 чел\n"
+            f"• Реферальный доход: 0.00 USDT\n"
+            f"• Успешных пополнений: {paid_count} шт\n"
+            f"• Операций в истории: 0 шт"
+        )
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="client_ref")],
+            [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+        ])
+
+        await call.message.answer(text, reply_markup=keyboard)
+        return await call.answer()
+
+    if call.data == "client_back_menu":
+        uid = call.from_user.id
+        text = (
+            "🏠 Главное меню клиента\n\n"
+            "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
+            "пополнить номер телефона или оплатить готовый QR-код.\n"
+            "Все этапы заявки фиксируются внутри сервиса.\n\n"
+            "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
+            "🆕 Уникальная карта: дополнительно +10.00%\n"
+            "🔳 QR-оплата: скидка по комиссии -8.00%\n"
+            "⚡️ Наши работники готовы обрабатывать заявки 24/7"
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
+                InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
+            ],
+            [
+                InlineKeyboardButton(text="📳 Пополнить номер телефона через банк", callback_data="client_phone"),
+                InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
+            ],
+            [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+            [
+                InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
+                InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
+            ],
+            [InlineKeyboardButton(text="🆘 Поддержка", callback_data="client_support")]
+        ])
+        await call.message.answer(text, reply_markup=keyboard)
+        return await call.answer()
+
     await call.answer("🚧 Раздел в разработке", show_alert=True)
 
 # ===== NEW ORDER =====
