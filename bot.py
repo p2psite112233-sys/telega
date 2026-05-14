@@ -868,26 +868,98 @@ async def take(call: types.CallbackQuery):
 
     user_id = row[0]
 
-    client_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="🔑 Запросить код",
-                callback_data=f"request_code_{order_id}"
-            )
-        ]
-    ])
+    client_keyboard = None
 
     await bot.send_message(
         user_id,
         f"🟢 Ваша заявка #{order_id} принята в работу\n\n"
         f"👨‍💻 Исполнитель уже занимается вашим заказом\n"
-        f"⏳ Ожидайте завершения",
-        reply_markup=client_keyboard
+        f"⏳ Ожидайте реквизитов для оплаты"
     )
+
+    # Кнопка для воркера — отправить реквизиты
+    worker_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")]
+    ])
 
     await call.answer("Взял в работу ❤️")
     await call.message.edit_reply_markup(reply_markup=None)
-    await call.message.answer("Заявка принята🔥")
+    await call.message.answer("Заявка принята🔥", reply_markup=worker_keyboard)
+
+# ===== SEND REQUISITES — выбор карты =====
+@dp.callback_query(F.data.startswith("send_req_"))
+async def send_req(call: types.CallbackQuery):
+    order_id = int(call.data.split("_")[2])
+    uid = call.from_user.id
+
+    cards = cur.execute(
+        "SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=?", (uid,)
+    ).fetchall()
+
+    if not cards:
+        return await call.answer("❌ У вас нет карт. Добавьте карту в /lk", show_alert=True)
+
+    card_buttons = []
+    for card in cards:
+        cid, number, expiry, bank = card
+        masked = f"{number[:6]}{'*'*6}{number[-4:]} · {bank}"
+        card_buttons.append([
+            InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"req_card_{order_id}_{cid}")
+        ])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
+
+    await call.message.answer(
+        f"💳 Выберите карту для заявки #{order_id}:",
+        reply_markup=keyboard
+    )
+    await call.answer()
+
+# ===== SEND REQUISITES — отправка клиенту =====
+@dp.callback_query(F.data.startswith("req_card_"))
+async def req_card(call: types.CallbackQuery):
+    parts = call.data.split("_")
+    order_id = int(parts[2])
+    card_id = int(parts[3])
+
+    row = cur.execute(
+        "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=? AND worker_id=?",
+        (card_id, call.from_user.id)
+    ).fetchone()
+
+    if not row:
+        return await call.answer("❌ Карта не найдена", show_alert=True)
+
+    number, expiry, cvv, bank = row
+
+    user_row = cur.execute(
+        "SELECT user_id FROM orders WHERE id=?", (order_id,)
+    ).fetchone()
+
+    if not user_row:
+        return await call.answer("❌ Заявка не найдена", show_alert=True)
+
+    user_id = user_row[0]
+
+    try:
+        await bot.send_message(
+            user_id,
+            f"💳 Реквизиты для оплаты\n\n"
+            f"🏦 Банк: {bank}\n"
+            f"💳 Номер карты: {number}\n"
+            f"📅 Срок: {expiry}\n"
+            f"🔐 CVV: {cvv}\n\n"
+            f"📥 Заявка #{order_id}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
+            ])
+        )
+    except:
+        return await call.answer("❌ Не удалось отправить реквизиты", show_alert=True)
+
+    await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer(f"✅ Реквизиты по заявке #{order_id} отправлены клиенту")
 
 # ===== REQUEST CODE =====
 @dp.callback_query(F.data.startswith("request_code_"))
