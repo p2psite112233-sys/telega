@@ -951,7 +951,8 @@ async def req_card(call: types.CallbackQuery):
             f"🔐 CVV: {cvv}\n\n"
             f"📥 Заявка #{order_id}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
+                [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"client_paid_{order_id}")]
             ])
         )
     except:
@@ -959,7 +960,12 @@ async def req_card(call: types.CallbackQuery):
 
     await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
     await call.message.edit_reply_markup(reply_markup=None)
-    await call.message.answer(f"✅ Реквизиты по заявке #{order_id} отправлены клиенту")
+    await call.message.answer(
+        f"✅ Реквизиты по заявке #{order_id} отправлены клиенту",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order_id}")]
+        ])
+    )
 
 # ===== REQUEST CODE =====
 @dp.callback_query(F.data.startswith("request_code_"))
@@ -1008,6 +1014,112 @@ async def send_code(call: types.CallbackQuery):
     )
 
     await call.answer()
+
+# ===== WORKER PAID — воркер видит оплату =====
+@dp.callback_query(F.data.startswith("worker_confirm_"))
+async def worker_confirm(call: types.CallbackQuery):
+    order_id = int(call.data.split("_")[2])
+    worker_id = call.from_user.id
+
+    row = cur.execute(
+        "SELECT user_id, amount, status FROM orders WHERE id=? AND worker_id=?",
+        (order_id, worker_id)
+    ).fetchone()
+
+    if not row:
+        return await call.answer("❌ Заявка не найдена", show_alert=True)
+
+    user_id, amount, status = row
+
+    if status == "DONE":
+        return await call.answer("✅ Заявка уже завершена", show_alert=True)
+
+    total = round(amount * 1.2, 2)
+    rate = await crypto_get_rate()
+    total_usdt = round(total / rate, 4)
+
+    # Уведомляем клиента
+    try:
+        await bot.send_message(
+            user_id,
+            f"💰 Исполнитель подтвердил получение оплаты!\n\n"
+            f"📥 Заявка #{order_id}\n"
+            f"💸 К списанию: {total_usdt:.4f} USDT ({total:.2f} RUB)\n\n"
+            f"Подтвердите оплату:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"client_paid_{order_id}_{total_usdt}")]
+            ])
+        )
+    except:
+        return await call.answer("❌ Не удалось отправить уведомление клиенту", show_alert=True)
+
+    await call.answer("✅ Запрос отправлен клиенту", show_alert=True)
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer(f"⏳ Ожидаем подтверждения от клиента по заявке #{order_id}")
+
+# ===== CLIENT PAID — клиент подтверждает =====
+@dp.callback_query(F.data.startswith("client_paid_"))
+async def client_paid(call: types.CallbackQuery):
+    parts = call.data.split("_")
+    order_id = int(parts[2])
+    total_usdt = float(parts[3])
+    uid = call.from_user.id
+
+    row = cur.execute(
+        "SELECT worker_id, amount, status FROM orders WHERE id=? AND user_id=?",
+        (order_id, uid)
+    ).fetchone()
+
+    if not row:
+        return await call.answer("❌ Заявка не найдена", show_alert=True)
+
+    worker_id, amount, status = row
+
+    if status == "DONE":
+        return await call.answer("✅ Заявка уже завершена", show_alert=True)
+
+    # Проверяем баланс клиента
+    client_balance = get_balance(uid)
+    if client_balance < total_usdt:
+        return await call.answer(
+            f"❌ Недостаточно средств. Ваш баланс: {client_balance:.4f} USDT",
+            show_alert=True
+        )
+
+    # Списываем с клиента
+    cur.execute("UPDATE balances SET balance = balance - ? WHERE user_id=?", (total_usdt, uid))
+
+    # Зачисляем воркеру
+    cur.execute("""
+        INSERT INTO balances (user_id, balance) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?
+    """, (worker_id, total_usdt, total_usdt))
+
+    # Закрываем заявку
+    cur.execute("UPDATE orders SET status='DONE' WHERE id=?", (order_id,))
+    conn.commit()
+
+    client_balance_new = get_balance(uid)
+    worker_balance = get_balance(worker_id)
+
+    await call.answer("✅ Оплата подтверждена!", show_alert=True)
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.message.answer(
+        f"✅ Заявка #{order_id} завершена!\n\n"
+        f"💸 Списано: {total_usdt:.4f} USDT\n"
+        f"💰 Ваш баланс: {client_balance_new:.4f} USDT"
+    )
+
+    # Уведомляем воркера
+    try:
+        await bot.send_message(
+            worker_id,
+            f"✅ Заявка #{order_id} завершена!\n\n"
+            f"💎 Зачислено: {total_usdt:.4f} USDT\n"
+            f"💰 Ваш баланс: {worker_balance:.4f} USDT"
+        )
+    except:
+        pass
 
 # ===== MAIN =====
 async def main():
