@@ -347,7 +347,10 @@ async def lk(message: types.Message):
         await message.answer(text, reply_markup=keyboard)
 
 # ===== ЗАГЛУШКИ КНОПОК ЛК =====
-@dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_"))
+@dp.callback_query(
+    (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_"))
+    & ~F.data.startswith("client_paid_")
+)
 async def lk_buttons(call: types.CallbackQuery):
     if call.data == "client_card":
         waiting[call.from_user.id] = True
@@ -1129,4 +1132,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
