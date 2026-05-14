@@ -127,45 +127,74 @@ async def set_worker(message: types.Message):
         await message.answer("Ошибка ID")
 
 
-# ===== ЛИЧНЫЙ КАБИНЕТ ВОРКЕРА =====
+# ===== ЛИЧНЫЙ КАБИНЕТ =====
 @dp.message(F.text == "/lk")
 async def lk(message: types.Message):
     uid = message.from_user.id
     role = get_role(uid)
 
-    if role not in ["worker", "admin"]:
-        return await message.answer("❌ У вас нет доступа к личному кабинету")
+    if role in ["worker", "admin"]:
+        username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
 
-    username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
+        text = (
+            f"🛠 Профиль работника\n"
+            f"Ваш профиль: {username} [{uid}]\n\n"
+            f"💼 Финансы\n"
+            f"• Доступно для вывода: 0.00 USDT\n"
+            f"• Заморожено: 0.00 USDT\n\n"
+            f"📊 Статистика\n"
+            f"• Обработано заявок: 0 шт\n"
+            f"• Объем закрытых заявок: 0.00 USDT\n"
+            f"• Выплачено вам: 0.00 USDT\n"
+            f"• Обработанная сумма: 0.00 RUB\n"
+            f"• Активных заявок: 0 шт"
+        )
 
-    text = (
-        f"🛠 Профиль работника\n"
-        f"Ваш профиль: {username} [{uid}]\n\n"
-        f"💼 Финансы\n"
-        f"• Доступно для вывода: 0.00 USDT\n"
-        f"• Заморожено: 0.00 USDT\n\n"
-        f"📊 Статистика\n"
-        f"• Обработано заявок: 0 шт\n"
-        f"• Объем закрытых заявок: 0.00 USDT\n"
-        f"• Выплачено вам: 0.00 USDT\n"
-        f"• Обработанная сумма: 0.00 RUB\n"
-        f"• Активных заявок: 0 шт"
-    )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
+            [
+                InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
+                InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")
+            ],
+            [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="lk_menu")]
+        ])
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
-        [
-            InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
-            InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")
-        ],
-        [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
-        [InlineKeyboardButton(text="🏠 В меню", callback_data="lk_menu")]
-    ])
+        await message.answer(text, reply_markup=keyboard)
 
-    await message.answer(text, reply_markup=keyboard)
+    else:
+        text = (
+            "🏠 Главное меню клиента\n\n"
+            "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
+            "пополнить номер телефона или оплатить готовый QR-код.\n"
+            "Все этапы заявки фиксируются внутри сервиса.\n\n"
+            "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
+            "🆕 Уникальная карта: дополнительно +10.00%\n"
+            "🔳 QR-оплата: скидка по комиссии -8.00%\n"
+            "⚡️ Наши работники готовы обрабатывать заявки 24/7"
+        )
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
+                InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
+            ],
+            [
+                InlineKeyboardButton(text="📳 Пополнить номер телефона через банк", callback_data="client_phone"),
+                InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
+            ],
+            [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+            [
+                InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
+                InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
+            ],
+            [InlineKeyboardButton(text="🆘 Поддержка", callback_data="client_support")]
+        ])
+
+        await message.answer(text, reply_markup=keyboard)
 
 # ===== ЗАГЛУШКИ КНОПОК ЛК =====
-@dp.callback_query(F.data.startswith("lk_"))
+@dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_"))
 async def lk_buttons(call: types.CallbackQuery):
     await call.answer("🚧 Раздел в разработке", show_alert=True)
 
