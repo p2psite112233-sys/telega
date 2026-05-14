@@ -1,12 +1,15 @@
 import asyncio
 import os
 import sqlite3
+import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 # ===== BOT =====
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+CRYPTO_BOT_TOKEN = os.getenv("CRYPTO_BOT_TOKEN")
+CRYPTO_API_URL = "https://pay.crypt.bot/api"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -30,12 +33,29 @@ CREATE TABLE IF NOT EXISTS workers (
     user_id INTEGER PRIMARY KEY
 )
 """)
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS balances (
+    user_id INTEGER PRIMARY KEY,
+    balance REAL DEFAULT 0.0
+)
+""")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS invoices (
+    invoice_id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    amount REAL,
+    status TEXT DEFAULT 'active'
+)
+""")
 conn.commit()
 
 # ===== GLOBAL STATE =====
 pending_code = {}      # worker_id -> order_id (воркер вводит код)
 pending_code_msg = {}  # worker_id -> message_id кнопки "SEND CODE"
 waiting = {}           # user_id -> True (пользователь вводит сумму)
+waiting_topup = {}     # user_id -> True (пользователь вводит сумму пополнения)
 
 # ===== WEB (Render fix) =====
 async def handle(request):
@@ -74,6 +94,72 @@ def load_workers():
         users_role[uid] = "worker"
 
 ADMIN_ID = 8538723496
+
+# ===== CRYPTOBOT HELPERS =====
+async def crypto_get_rate() -> float:
+    """Получает курс USDT/RUB из CryptoBot."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{CRYPTO_API_URL}/getExchangeRates",
+                headers={"Crypto-Pay-API-Token": CRYPTO_BOT_TOKEN}
+            ) as resp:
+                data = await resp.json()
+                if data.get("ok"):
+                    for rate in data["result"]:
+                        if rate["source"] == "USDT" and rate["target"] == "RUB":
+                            return float(rate["rate"])
+    except:
+        pass
+    return 90.0  # fallback курс
+
+async def crypto_create_invoice(amount_usdt: float, user_id: int) -> dict | None:
+    """Создаёт инвойс в CryptoBot."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{CRYPTO_API_URL}/createInvoice",
+                headers={"Crypto-Pay-API-Token": CRYPTO_BOT_TOKEN},
+                json={
+                    "asset": "USDT",
+                    "amount": str(round(amount_usdt, 2)),
+                    "description": f"Пополнение баланса (ID: {user_id})",
+                    "expires_in": 900  # 15 минут
+                }
+            ) as resp:
+                data = await resp.json()
+                if data.get("ok"):
+                    return data["result"]
+    except:
+        pass
+    return None
+
+async def crypto_check_invoice(invoice_id: int) -> str:
+    """Проверяет статус инвойса. Возвращает 'paid', 'active' или 'expired'."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{CRYPTO_API_URL}/getInvoices",
+                headers={"Crypto-Pay-API-Token": CRYPTO_BOT_TOKEN},
+                params={"invoice_ids": str(invoice_id)}
+            ) as resp:
+                data = await resp.json()
+                if data.get("ok") and data["result"]["items"]:
+                    return data["result"]["items"][0]["status"]
+    except:
+        pass
+    return "unknown"
+
+def get_balance(user_id: int) -> float:
+    row = cur.execute("SELECT balance FROM balances WHERE user_id=?", (user_id,)).fetchone()
+    return row[0] if row else 0.0
+
+def add_balance(user_id: int, amount: float):
+    cur.execute("""
+        INSERT INTO balances (user_id, balance) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?
+    """, (user_id, amount, amount))
+    conn.commit()
 
 # ===== MENU =====
 menu = ReplyKeyboardMarkup(
@@ -196,6 +282,27 @@ async def lk(message: types.Message):
 # ===== ЗАГЛУШКИ КНОПОК ЛК =====
 @dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_"))
 async def lk_buttons(call: types.CallbackQuery):
+    if call.data == "client_card":
+        waiting[call.from_user.id] = True
+        await call.message.answer(
+            "💳 Карта под оплату\n\n"
+            "Введите сумму в RUB, на которую нужна карта.\n"
+            "После подтверждения работник отправит реквизиты для оплаты.\n\n"
+            "💸 Сумма заявки: в рублях\n"
+            "Пример: 500"
+        )
+        return await call.answer()
+
+    if call.data == "client_topup":
+        waiting_topup[call.from_user.id] = True
+        await call.message.answer(
+            "💳 Пополнение баланса\n\n"
+            "Введите сумму пополнения в USDT.\n"
+            "После оплаты инвойса баланс зачислится автоматически.\n\n"
+            "💸 Сумма пополнения: в USDT"
+        )
+        return await call.answer()
+
     await call.answer("🚧 Раздел в разработке", show_alert=True)
 
 # ===== NEW ORDER =====
@@ -257,7 +364,59 @@ async def text_handler(message: types.Message):
 
         return await message.answer("✅ Код отправлен клиенту")
 
-    # --- 2. Пользователь вводит сумму заявки ---
+    # --- 2. Пользователь вводит сумму пополнения ---
+    if waiting_topup.get(uid):
+        text = message.text.strip()
+        try:
+            amount_usdt = float(text)
+        except:
+            return await message.answer("❌ Введите число, например 10")
+
+        if amount_usdt <= 0:
+            return await message.answer("❌ Сумма должна быть больше 0")
+
+        waiting_topup[uid] = False
+
+        # Получаем курс
+        rate = await crypto_get_rate()
+        amount_rub = round(amount_usdt * rate, 2)
+        commission = round(amount_usdt * 0.03, 2)
+        to_credit = round(amount_usdt - commission, 2)
+
+        # Создаём инвойс
+        invoice = await crypto_create_invoice(amount_usdt, uid)
+        if not invoice:
+            return await message.answer("❌ Ошибка создания инвойса. Попробуйте позже.")
+
+        invoice_id = invoice["invoice_id"]
+        pay_url = invoice["bot_invoice_url"]
+
+        # Сохраняем инвойс в БД
+        cur.execute(
+            "INSERT OR IGNORE INTO invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
+            (invoice_id, uid, to_credit)
+        )
+        conn.commit()
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💰 Оплатить инвойс", url=pay_url)]
+        ])
+
+        await message.answer(
+            f"🧾 Счёт на пополнение #{invoice_id}\n\n"
+            f"Оплатите инвойс, после чего баланс будет зачислен автоматически.\n\n"
+            f"💰 Сумма: {amount_usdt:.2f} USDT (~{amount_rub:.2f} RUB)\n"
+            f"Комиссия пополнения: {commission:.2f} USDT\n"
+            f"💎 К зачислению: {to_credit:.2f} USDT\n"
+            f"🕒 Проверка оплаты: каждые 10 секунд в течение 15 минут",
+            reply_markup=keyboard
+        )
+
+        # Запускаем проверку оплаты в фоне
+        asyncio.create_task(check_payment_loop(uid, invoice_id, to_credit))
+        return
+
+    # --- 3. Пользователь вводит сумму заявки ---
     if not waiting.get(uid):
         return
 
@@ -310,6 +469,50 @@ async def text_handler(message: types.Message):
         f"👨‍💻 Исполнитель: назначается\n\n"
         f"⏳ Ожидайте — мы уже взяли вашу заявку в работу и скоро свяжемся с вами"
     )
+
+# ===== ПРОВЕРКА ОПЛАТЫ =====
+async def check_payment_loop(user_id: int, invoice_id: int, to_credit: float):
+    """Проверяет оплату каждые 10 секунд в течение 15 минут."""
+    for _ in range(90):  # 90 * 10 сек = 15 минут
+        await asyncio.sleep(10)
+        status = await crypto_check_invoice(invoice_id)
+
+        if status == "paid":
+            # Проверяем что не зачислили уже
+            row = cur.execute(
+                "SELECT status FROM invoices WHERE invoice_id=?", (invoice_id,)
+            ).fetchone()
+            if row and row[0] == "active":
+                add_balance(user_id, to_credit)
+                cur.execute(
+                    "UPDATE invoices SET status='paid' WHERE invoice_id=?", (invoice_id,)
+                )
+                conn.commit()
+                balance = get_balance(user_id)
+                try:
+                    await bot.send_message(
+                        user_id,
+                        f"✅ Баланс пополнен!\n\n"
+                        f"💎 Зачислено: {to_credit:.2f} USDT\n"
+                        f"💰 Текущий баланс: {balance:.2f} USDT"
+                    )
+                except:
+                    pass
+            return
+
+        if status == "expired":
+            cur.execute(
+                "UPDATE invoices SET status='expired' WHERE invoice_id=?", (invoice_id,)
+            )
+            conn.commit()
+            try:
+                await bot.send_message(
+                    user_id,
+                    f"❌ Инвойс #{invoice_id} истёк. Создайте новый через /lk"
+                )
+            except:
+                pass
+            return
 
 # ===== TAKE ORDER =====
 @dp.callback_query(F.data.startswith("take_"))
