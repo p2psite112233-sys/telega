@@ -49,6 +49,17 @@ CREATE TABLE IF NOT EXISTS invoices (
     status TEXT DEFAULT 'active'
 )
 """)
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS cards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id INTEGER,
+    card_number TEXT,
+    expiry TEXT,
+    cvv TEXT,
+    bank TEXT
+)
+""")
 conn.commit()
 
 # ===== GLOBAL STATE =====
@@ -56,6 +67,8 @@ pending_code = {}      # worker_id -> order_id (воркер вводит код
 pending_code_msg = {}  # worker_id -> message_id кнопки "SEND CODE"
 waiting = {}           # user_id -> True (пользователь вводит сумму)
 waiting_topup = {}     # user_id -> True (пользователь вводит сумму пополнения)
+waiting_card = {}      # worker_id -> True (воркер вводит данные карты)
+waiting_bank = {}      # worker_id -> dict с данными карты (ждёт название банка)
 
 # ===== WEB (Render fix) =====
 async def handle(request):
@@ -160,6 +173,39 @@ def add_balance(user_id: int, amount: float):
         ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?
     """, (user_id, amount, amount))
     conn.commit()
+
+# ===== CARD HELPERS =====
+import re
+
+def parse_card(text: str) -> dict | None:
+    """Парсит данные карты из текста в любом формате."""
+    # Номер карты — 16 цифр (с пробелами, слешами или без)
+    number_match = re.search(r'(\d[\d\s/\-]{13,18}\d)', text)
+    card_number = re.sub(r'[\s/\-]', '', number_match.group(1)) if number_match else None
+    if card_number and len(card_number) != 16:
+        card_number = None
+
+    # Срок — MM/YY или MM YY
+    expiry_match = re.search(r'(\d{2})[/\s](\d{2,4})', text)
+    expiry = None
+    if expiry_match:
+        mm = expiry_match.group(1)
+        yy = expiry_match.group(2)[-2:]
+        expiry = f"{mm}/{yy}"
+
+    # CVV — 3 цифры отдельно (после слова "код" или просто 3 цифры подряд)
+    cvv_match = re.search(r'(?:код|cvv|cvc)[:\s]*(\d{3})', text, re.IGNORECASE)
+    if not cvv_match:
+        # ищем 3 цифры которые не часть номера карты
+        clean = re.sub(r'\d[\d\s/\-]{13,18}\d', '', text)
+        clean = re.sub(r'\d{2}[/\s]\d{2,4}', '', clean)
+        cvv_match = re.search(r'\b(\d{3})\b', clean)
+    cvv = cvv_match.group(1) if cvv_match else None
+
+    if not card_number:
+        return None
+
+    return {"number": card_number, "expiry": expiry or "—", "cvv": cvv or "—"}
 
 # ===== MENU =====
 menu = ReplyKeyboardMarkup(
@@ -376,6 +422,72 @@ async def lk_buttons(call: types.CallbackQuery):
         await call.message.answer(text, reply_markup=keyboard)
         return await call.answer()
 
+    if call.data == "lk_cards":
+        uid = call.from_user.id
+        card_count = cur.execute(
+            "SELECT COUNT(*) FROM cards WHERE worker_id=?", (uid,)
+        ).fetchone()[0]
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")],
+            [InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")],
+            [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+        ])
+
+        await call.message.answer(
+            f"💳 Управление картами\n\n"
+            f"Здесь вы храните свои карты для быстрых отправок в заявках.\n"
+            f"Выберите карту из списка или добавьте новую.\n\n"
+            f"💼 Сохранено карт: {card_count}",
+            reply_markup=keyboard
+        )
+        return await call.answer()
+
+    if call.data == "cards_add":
+        waiting_card[call.from_user.id] = True
+        await call.message.answer(
+            "➕ Добавление карты\n\n"
+            "Карта сохранится в вашем профиле и появится в общем списке.\n"
+            "Любой лишний текст бот сохранит как название карты.\n\n"
+            "💳 Отправьте данные карты в любом удобном виде.\n"
+            "Бот сам найдет номер карты, срок и код (3 цифры).\n\n"
+            "Поддерживаются варианты:\n"
+            "1111222233334444\n"
+            "1111 1111 1111 1111\n"
+            "1111/1111/1111/1111\n"
+            "00/00 или 00 00\n"
+            "Код: 000"
+        )
+        return await call.answer()
+
+    if call.data == "lk_home":
+        uid = call.from_user.id
+        username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
+        text = (
+            f"🛠 Профиль работника\n"
+            f"Ваш профиль: {username} [{uid}]\n\n"
+            f"💼 Финансы\n"
+            f"• Доступно для вывода: 0.00 USDT\n"
+            f"• Заморожено: 0.00 USDT\n\n"
+            f"📊 Статистика\n"
+            f"• Обработано заявок: 0 шт\n"
+            f"• Объем закрытых заявок: 0.00 USDT\n"
+            f"• Выплачено вам: 0.00 USDT\n"
+            f"• Обработанная сумма: 0.00 RUB\n"
+            f"• Активных заявок: 0 шт"
+        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
+            [
+                InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
+                InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")
+            ],
+            [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
+            [InlineKeyboardButton(text="🏠 В меню", callback_data="lk_menu")]
+        ])
+        await call.message.answer(text, reply_markup=keyboard)
+        return await call.answer()
+
     await call.answer("🚧 Раздел в разработке", show_alert=True)
 
 # ===== NEW ORDER =====
@@ -489,7 +601,52 @@ async def text_handler(message: types.Message):
         asyncio.create_task(check_payment_loop(uid, invoice_id, to_credit))
         return
 
-    # --- 3. Пользователь вводит сумму заявки ---
+    # --- 3. Воркер вводит данные карты ---
+    if waiting_card.get(uid):
+        waiting_card[uid] = False
+        card = parse_card(message.text)
+        if not card:
+            return await message.answer("❌ Не удалось найти номер карты. Попробуйте ещё раз — нажмите '➕ Добавить карту'")
+
+        waiting_bank[uid] = card
+        return await message.answer(
+            f"✅ Карта распознана:\n\n"
+            f"💳 Номер: {card['number']}\n"
+            f"📅 Срок: {card['expiry']}\n"
+            f"🔐 CVV: {card['cvv']}\n\n"
+            f"🏦 Введите название банка:"
+        )
+
+    # --- 4. Воркер вводит название банка ---
+    if uid in waiting_bank:
+        card = waiting_bank.pop(uid)
+        bank = message.text.strip()
+
+        cur.execute(
+            "INSERT INTO cards (worker_id, card_number, expiry, cvv, bank) VALUES (?, ?, ?, ?, ?)",
+            (uid, card["number"], card["expiry"], card["cvv"], bank)
+        )
+        conn.commit()
+
+        card_count = cur.execute(
+            "SELECT COUNT(*) FROM cards WHERE worker_id=?", (uid,)
+        ).fetchone()[0]
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Добавить ещё", callback_data="cards_add")],
+            [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+        ])
+
+        return await message.answer(
+            f"✅ Карта сохранена!\n\n"
+            f"💳 {card['number']}\n"
+            f"🏦 Банк: {bank}\n"
+            f"📅 Срок: {card['expiry']}\n\n"
+            f"💼 Всего карт: {card_count}",
+            reply_markup=keyboard
+        )
+
+    # --- 5. Пользователь вводит сумму заявки ---
     if not waiting.get(uid):
         return
 
