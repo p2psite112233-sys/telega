@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS cards (
     card_number TEXT,
     expiry TEXT,
     cvv TEXT,
-    bank TEXT
+    bank TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
 conn.commit()
@@ -346,7 +347,7 @@ async def lk(message: types.Message):
         await message.answer(text, reply_markup=keyboard)
 
 # ===== ЗАГЛУШКИ КНОПОК ЛК =====
-@dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_"))
+@dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_"))
 async def lk_buttons(call: types.CallbackQuery):
     if call.data == "client_card":
         waiting[call.from_user.id] = True
@@ -444,15 +445,24 @@ async def lk_buttons(call: types.CallbackQuery):
 
     if call.data == "lk_cards":
         uid = call.from_user.id
-        card_count = cur.execute(
-            "SELECT COUNT(*) FROM cards WHERE worker_id=?", (uid,)
-        ).fetchone()[0]
+        cards = cur.execute(
+            "SELECT id, card_number, expiry FROM cards WHERE worker_id=?", (uid,)
+        ).fetchall()
 
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")],
-            [InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")],
-            [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
-        ])
+        card_count = len(cards)
+
+        # Каждая карта — отдельная кнопка с маскировкой
+        card_buttons = []
+        for card in cards:
+            cid, number, expiry = card
+            masked = f"{number[:6]}{'*'*6}{number[-4:]} · {expiry}"
+            card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{cid}")])
+
+        card_buttons.append([InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")])
+        card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
+        card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
 
         await call.message.answer(
             f"💳 Управление картами\n\n"
@@ -507,6 +517,74 @@ async def lk_buttons(call: types.CallbackQuery):
         ])
         await call.message.answer(text, reply_markup=keyboard)
         return await call.answer()
+
+    # Просмотр карты
+    if call.data.startswith("card_view_"):
+        card_id = int(call.data.split("_")[2])
+        row = cur.execute(
+            "SELECT card_number, expiry, cvv, bank, created_at FROM cards WHERE id=? AND worker_id=?",
+            (card_id, call.from_user.id)
+        ).fetchone()
+
+        if not row:
+            return await call.answer("❌ Карта не найдена", show_alert=True)
+
+        number, expiry, cvv, bank, created_at = row
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🗑 Удалить карту", callback_data=f"card_delete_{card_id}")],
+            [InlineKeyboardButton(text="◀️ К списку карт", callback_data="lk_cards")],
+            [InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")]
+        ])
+
+        await call.message.answer(
+            f"💳 Карточка карты\n\n"
+            f"Полные реквизиты карты для использования в заявках.\n\n"
+            f"💳 Номер: {number}\n"
+            f"📅 Срок: {expiry}\n"
+            f"🔐 Код: {cvv}\n"
+            f"🏦 Банк: {bank}\n"
+            f"🕒 Добавлена: {created_at}",
+            reply_markup=keyboard
+        )
+        return await call.answer()
+
+    # Удаление карты
+    if call.data.startswith("card_delete_"):
+        card_id = int(call.data.split("_")[2])
+        cur.execute(
+            "DELETE FROM cards WHERE id=? AND worker_id=?",
+            (card_id, call.from_user.id)
+        )
+        conn.commit()
+
+        await call.answer("✅ Карта удалена", show_alert=True)
+
+        # Возвращаем к списку карт
+        uid = call.from_user.id
+        cards = cur.execute(
+            "SELECT id, card_number, expiry FROM cards WHERE worker_id=?", (uid,)
+        ).fetchall()
+
+        card_buttons = []
+        for card in cards:
+            cid, number, expiry = card
+            masked = f"{number[:6]}{'*'*6}{number[-4:]} · {expiry}"
+            card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{cid}")])
+
+        card_buttons.append([InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")])
+        card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
+        card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
+        await call.message.answer(
+            f"💳 Управление картами\n\n"
+            f"Здесь вы храните свои карты для быстрых отправок в заявках.\n"
+            f"Выберите карту из списка или добавьте новую.\n\n"
+            f"💼 Сохранено карт: {len(cards)}",
+            reply_markup=keyboard
+        )
+        return
 
     await call.answer("🚧 Раздел в разработке", show_alert=True)
 
