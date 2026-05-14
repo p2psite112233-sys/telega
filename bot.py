@@ -179,28 +179,48 @@ import re
 
 def parse_card(text: str) -> dict | None:
     """Парсит данные карты из текста в любом формате."""
-    # Номер карты — 16 цифр (с пробелами, слешами или без)
-    number_match = re.search(r'(\d[\d\s/\-]{13,18}\d)', text)
-    card_number = re.sub(r'[\s/\-]', '', number_match.group(1)) if number_match else None
-    if card_number and len(card_number) != 16:
-        card_number = None
+    lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+    all_text = ' '.join(lines)
 
-    # Срок — MM/YY или MM YY
-    expiry_match = re.search(r'(\d{2})[/\s](\d{2,4})', text)
+    # Номер карты — 16 цифр подряд или с разделителями
+    card_number = None
+    for line in lines:
+        digits = re.sub(r'[\s/\-]', '', line)
+        if re.fullmatch(r'\d{16}', digits):
+            card_number = digits
+            break
+    if not card_number:
+        match = re.search(r'(\d[\d\s/\-]{14,18}\d)', all_text)
+        if match:
+            digits = re.sub(r'[\s/\-]', '', match.group(1))
+            if len(digits) == 16:
+                card_number = digits
+
+    # Срок — MM/YY, MMYY, MM YY
     expiry = None
-    if expiry_match:
-        mm = expiry_match.group(1)
-        yy = expiry_match.group(2)[-2:]
-        expiry = f"{mm}/{yy}"
+    for line in lines:
+        m = re.fullmatch(r'(\d{2})[/\s]?(\d{2,4})', line)
+        if m:
+            mm = m.group(1)
+            yy = m.group(2)[-2:]
+            expiry = f"{mm}/{yy}"
+            break
+    if not expiry:
+        m = re.search(r'\b(\d{2})[/\s](\d{2,4})\b', all_text)
+        if m:
+            expiry = f"{m.group(1)}/{m.group(2)[-2:]}"
 
-    # CVV — 3 цифры отдельно (после слова "код" или просто 3 цифры подряд)
-    cvv_match = re.search(r'(?:код|cvv|cvc)[:\s]*(\d{3})', text, re.IGNORECASE)
-    if not cvv_match:
-        # ищем 3 цифры которые не часть номера карты
-        clean = re.sub(r'\d[\d\s/\-]{13,18}\d', '', text)
-        clean = re.sub(r'\d{2}[/\s]\d{2,4}', '', clean)
-        cvv_match = re.search(r'\b(\d{3})\b', clean)
-    cvv = cvv_match.group(1) if cvv_match else None
+    # CVV — 3 цифры на отдельной строке или после "код"
+    cvv = None
+    for line in lines:
+        m = re.fullmatch(r'\d{3}', line)
+        if m and line != (expiry or '').replace('/', '')[:3]:
+            cvv = line
+            break
+    if not cvv:
+        m = re.search(r'(?:код|cvv|cvc)[:\s]*(\d{3})', all_text, re.IGNORECASE)
+        if m:
+            cvv = m.group(1)
 
     if not card_number:
         return None
@@ -343,9 +363,9 @@ async def lk_buttons(call: types.CallbackQuery):
         waiting_topup[call.from_user.id] = True
         await call.message.answer(
             "💳 Пополнение баланса\n\n"
-            "Введите сумму пополнения в USDT.\n"
+            "Введите сумму пополнения в рублях.\n"
             "После оплаты инвойса баланс зачислится автоматически.\n\n"
-            "💸 Сумма пополнения: в USDT"
+            "💸 Сумма пополнения: в рублях"
         )
         return await call.answer()
 
@@ -553,18 +573,18 @@ async def text_handler(message: types.Message):
     if waiting_topup.get(uid):
         text = message.text.strip()
         try:
-            amount_usdt = float(text)
+            amount_rub = float(text)
         except:
-            return await message.answer("❌ Введите число, например 10")
+            return await message.answer("❌ Введите число, например 1000")
 
-        if amount_usdt <= 0:
+        if amount_rub <= 0:
             return await message.answer("❌ Сумма должна быть больше 0")
 
         waiting_topup[uid] = False
 
-        # Получаем курс
+        # Получаем курс и конвертируем RUB → USDT
         rate = await crypto_get_rate()
-        amount_rub = round(amount_usdt * rate, 2)
+        amount_usdt = round(amount_rub / rate, 2)
         commission = round(amount_usdt * 0.03, 2)
         to_credit = round(amount_usdt - commission, 2)
 
@@ -590,7 +610,7 @@ async def text_handler(message: types.Message):
         await message.answer(
             f"🧾 Счёт на пополнение #{invoice_id}\n\n"
             f"Оплатите инвойс, после чего баланс будет зачислен автоматически.\n\n"
-            f"💰 Сумма: {amount_usdt:.2f} USDT (~{amount_rub:.2f} RUB)\n"
+            f"💰 Сумма: {amount_rub:.2f} RUB (~{amount_usdt:.2f} USDT)\n"
             f"Комиссия пополнения: {commission:.2f} USDT\n"
             f"💎 К зачислению: {to_credit:.2f} USDT\n"
             f"🕒 Проверка оплаты: каждые 10 секунд в течение 15 минут",
