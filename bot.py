@@ -326,7 +326,7 @@ async def lk(message: types.Message):
         await message.answer(text, reply_markup=keyboard)
 
 # ===== ЗАГЛУШКИ КНОПОК ЛК =====
-@dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_"))
+@dp.callback_query(F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_"))
 async def lk_buttons(call: types.CallbackQuery):
     if call.data == "client_card":
         waiting[call.from_user.id] = True
