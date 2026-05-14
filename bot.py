@@ -33,8 +33,9 @@ CREATE TABLE IF NOT EXISTS workers (
 conn.commit()
 
 # ===== GLOBAL STATE =====
-pending_code = {}   # worker_id -> order_id (воркер вводит код)
-waiting = {}        # user_id -> True (пользователь вводит сумму)
+pending_code = {}      # worker_id -> order_id (воркер вводит код)
+pending_code_msg = {}  # worker_id -> message_id кнопки "SEND CODE"
+waiting = {}           # user_id -> True (пользователь вводит сумму)
 
 # ===== WEB (Render fix) =====
 async def handle(request):
@@ -76,7 +77,7 @@ ADMIN_ID = 8538723496
 
 # ===== MENU =====
 menu = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="💳 Новая заявка")]],
+    keyboard=[[KeyboardButton(text="💳 Карта под оплату")]],
     resize_keyboard=True
 )
 
@@ -88,9 +89,19 @@ async def start(message: types.Message):
     if role == "worker":
         await message.answer("🛠 Вы вошли как WORKER", reply_markup=menu)
     elif role == "admin":
-        await message.answer("👑 Вы вошли как ADMIN", reply_markup=menu)
+        await message.answer("👑 Вы вошли как администратор", reply_markup=menu)
     else:
-        await message.answer("👤 Вы вошли как USER", reply_markup=menu)
+        await message.answer(
+            "🏠 Главное меню клиента\n\n"
+            "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
+            "пополнить номер телефона или оплатить готовый QR-код.\n"
+            "Все этапы заявки фиксируются внутри сервиса.\n\n"
+            "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
+            "🆕 Уникальная карта: дополнительно +10.00%\n"
+            "🔳 QR-оплата: скидка по комиссии -8.00%\n"
+            "⚡️ Наши работники готовы обрабатывать заявки 24/7",
+            reply_markup=menu
+        )
 
 # ===== SET WORKER =====
 @dp.message(F.text.startswith("/setworker"))
@@ -116,7 +127,7 @@ async def set_worker(message: types.Message):
         await message.answer("Ошибка ID")
 
 # ===== NEW ORDER =====
-@dp.message(F.text == "💳 Новая заявка")
+@dp.message(F.text == "💳 Карта под оплату")
 async def new_order(message: types.Message):
     waiting[message.from_user.id] = True
 
@@ -131,7 +142,7 @@ async def new_order(message: types.Message):
 # ===== УНИВЕРСАЛЬНЫЙ ХЕНДЛЕР ТЕКСТА =====
 # ВАЖНО: один хендлер для всех текстов, кроме команд и кнопки меню.
 # Порядок проверки: сначала воркер (вводит код), потом юзер (вводит сумму).
-@dp.message(F.text & ~F.text.startswith("/") & (F.text != "💳 Новая заявка"))
+@dp.message(F.text & ~F.text.startswith("/") & (F.text != "💳 Карта под оплату"))
 async def text_handler(message: types.Message):
     uid = message.from_user.id
 
@@ -157,6 +168,20 @@ async def text_handler(message: types.Message):
             )
         except:
             return await message.answer("❌ Не удалось отправить код клиенту")
+
+        # Удаляем сообщение воркера с кодом
+        try:
+            await message.delete()
+        except:
+            pass
+
+        # Удаляем сообщение с кнопкой "SEND CODE"
+        btn_msg_id = pending_code_msg.pop(uid, None)
+        if btn_msg_id:
+            try:
+                await bot.delete_message(uid, btn_msg_id)
+            except:
+                pass
 
         return await message.answer("✅ Код отправлен клиенту")
 
@@ -297,8 +322,9 @@ async def request_code(call: types.CallbackQuery):
 async def send_code(call: types.CallbackQuery):
     order_id = int(call.data.split("_")[2])
 
-    # запоминаем заявку за воркером
+    # запоминаем заявку и message_id кнопки за воркером
     pending_code[call.from_user.id] = order_id
+    pending_code_msg[call.from_user.id] = call.message.message_id
 
     await bot.send_message(
         call.from_user.id,
