@@ -126,6 +126,49 @@ async def set_worker(message: types.Message):
     except:
         await message.answer("Ошибка ID")
 
+
+# ===== ЛИЧНЫЙ КАБИНЕТ ВОРКЕРА =====
+@dp.message(F.text == "/lk")
+async def lk(message: types.Message):
+    uid = message.from_user.id
+    role = get_role(uid)
+
+    if role not in ["worker", "admin"]:
+        return await message.answer("❌ У вас нет доступа к личному кабинету")
+
+    username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
+
+    text = (
+        f"🛠 Профиль работника\n"
+        f"Ваш профиль: {username} [{uid}]\n\n"
+        f"💼 Финансы\n"
+        f"• Доступно для вывода: 0.00 USDT\n"
+        f"• Заморожено: 0.00 USDT\n\n"
+        f"📊 Статистика\n"
+        f"• Обработано заявок: 0 шт\n"
+        f"• Объем закрытых заявок: 0.00 USDT\n"
+        f"• Выплачено вам: 0.00 USDT\n"
+        f"• Обработанная сумма: 0.00 RUB\n"
+        f"• Активных заявок: 0 шт"
+    )
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
+        [
+            InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
+            InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")
+        ],
+        [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
+        [InlineKeyboardButton(text="🏠 В меню", callback_data="lk_menu")]
+    ])
+
+    await message.answer(text, reply_markup=keyboard)
+
+# ===== ЗАГЛУШКИ КНОПОК ЛК =====
+@dp.callback_query(F.data.startswith("lk_"))
+async def lk_buttons(call: types.CallbackQuery):
+    await call.answer("🚧 Раздел в разработке", show_alert=True)
+
 # ===== NEW ORDER =====
 @dp.message(F.text == "💳 Карта под оплату")
 async def new_order(message: types.Message):
