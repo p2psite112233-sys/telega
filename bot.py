@@ -1,6 +1,8 @@
 import asyncio
 import os
 import re
+import sys
+import traceback
 import aiohttp
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -18,9 +20,16 @@ dp = Dispatcher()
 
 # ===== DB =====
 DATABASE_URL = os.getenv("DATABASE_URL")
-conn = psycopg2.connect(DATABASE_URL)
-conn.autocommit = True
-cur = conn.cursor()
+print(f"Connecting to DB: {DATABASE_URL[:30] if DATABASE_URL else 'NOT SET'}...")
+try:
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
+    cur = conn.cursor()
+    print("DB connected OK")
+except Exception as e:
+    print(f"DB CONNECTION ERROR: {e}")
+    traceback.print_exc()
+    sys.exit(1)
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS orders (
