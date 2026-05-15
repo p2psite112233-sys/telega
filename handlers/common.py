@@ -38,6 +38,8 @@ def load_workers():
         workers.add(uid)
         users_role[uid] = "worker"
 
+BANNER_FILE_ID = "AgACAgIAAxkBAAFJrM1qBuTKSil9Vek1xGAYheksr44KYwAC7xJrG9R3OEgcHJTvwo7uaQEAAwIAA3kAAzsE"
+
 def register_common(dp, bot):
 
     @dp.message(F.text == "/start")
@@ -49,14 +51,14 @@ def register_common(dp, bot):
             await message.answer("👑 Вы вошли как администратор", reply_markup=menu)
         else:
             text = (
-                "🏠 Главное меню клиента\n\n"
-                "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
+                "<b>🏠 Send$Paid — Главное меню</b>\n\n"
+                "<blockquote>Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
                 "пополнить номер телефона или оплатить готовый QR-код.\n"
-                "Все этапы заявки фиксируются внутри сервиса.\n\n"
-                "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
-                "🆕 Уникальная карта: дополнительно +10.00%\n"
-                "🔳 QR-оплата: скидка по комиссии -8.00%\n"
-                "⚡️ Наши работники готовы обрабатывать заявки 24/7"
+                "Все этапы заявки фиксируются внутри сервиса.</blockquote>\n\n"
+                "💼 Комиссия сервиса: <b>20%</b> от суммы, но не меньше 30 RUB\n"
+                "🆕 Уникальная карта: дополнительно <b>+10%</b>\n"
+                "🔳 QR-оплата: скидка по комиссии <b>-8%</b>\n"
+                "⚡️ Работаем <b>24/7</b>"
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [
@@ -64,7 +66,7 @@ def register_common(dp, bot):
                     InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
                 ],
                 [
-                    InlineKeyboardButton(text="📳 Пополнить номер телефона через банк", callback_data="client_phone"),
+                    InlineKeyboardButton(text="📳 Пополнить номер", callback_data="client_phone"),
                     InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
                 ],
                 [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
@@ -74,7 +76,12 @@ def register_common(dp, bot):
                 ],
                 [InlineKeyboardButton(text="🆘 Поддержка", callback_data="client_support")]
             ])
-            await message.answer(text, reply_markup=keyboard)
+            await message.answer_photo(
+                photo=BANNER_FILE_ID,
+                caption=text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
 
     @dp.message(F.text.startswith("/setworker"))
     async def set_worker(message: types.Message):
