@@ -419,9 +419,12 @@ def register_client(dp, bot):
                 status_text = "❌ Отменена"
             else:
                 status_text = "🟡 Новая"
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]
-            ])
+
+            buttons = [[InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]]
+            if status in ("NEW", "IN_PROGRESS"):
+                buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             await call.message.answer(
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
                 f"💳 Услуга: Карта под оплату\n"
