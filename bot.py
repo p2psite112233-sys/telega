@@ -1,4 +1,3 @@
-# v2
 import asyncio
 import os
 import re
@@ -6,7 +5,8 @@ import sys
 import traceback
 import aiohttp
 from urllib.parse import quote_plus
-print("==> Starting bot...")
+sys.stdout.reconfigure(line_buffering=True)
+print("==> Starting bot...", flush=True)
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from aiohttp import web
@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS orders (
     user_id BIGINT,
     amount REAL,
     status TEXT,
-    worker_id BIGINT
+    worker_id BIGINT,
+    client_message_id BIGINT,
+    worker_message_id BIGINT
 )
 """)
 
@@ -262,7 +264,7 @@ async def start(message: types.Message):
     elif role == "admin":
         await message.answer("👑 Вы вошли как администратор", reply_markup=menu)
     else:
-        await message.answer(
+        text = (
             "🏠 Главное меню клиента\n\n"
             "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
             "пополнить номер телефона или оплатить готовый QR-код.\n"
@@ -270,9 +272,25 @@ async def start(message: types.Message):
             "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
             "🆕 Уникальная карта: дополнительно +10.00%\n"
             "🔳 QR-оплата: скидка по комиссии -8.00%\n"
-            "⚡️ Наши работники готовы обрабатывать заявки 24/7",
-            reply_markup=menu
+            "⚡️ Наши работники готовы обрабатывать заявки 24/7"
         )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
+                InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
+            ],
+            [
+                InlineKeyboardButton(text="📳 Пополнить номер телефона через банк", callback_data="client_phone"),
+                InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
+            ],
+            [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+            [
+                InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
+                InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
+            ],
+            [InlineKeyboardButton(text="🆘 Поддержка", callback_data="client_support")]
+        ])
+        await message.answer(text, reply_markup=keyboard)
 
 # ===== SET WORKER =====
 @dp.message(F.text.startswith("/setworker"))
@@ -628,8 +646,8 @@ async def text_handler(message: types.Message):
         order_id = pending_code.pop(uid)
         code = message.text.strip()
 
-        row = cur.execute(
-            "SELECT user_id FROM orders WHERE id=%s",
+        cur.execute(
+            "SELECT user_id, amount, client_message_id FROM orders WHERE id=%s",
             (order_id,)
         )
         row = cur.fetchone()
@@ -637,15 +655,23 @@ async def text_handler(message: types.Message):
         if not row or not row[0]:
             return await message.answer("❌ Ошибка: пользователь не найден")
 
-        user_id = row[0]
+        user_id, amount, client_msg_id = row
 
+        # Редактируем сообщение клиента с кодом
         try:
-            await bot.send_message(
-                user_id,
-                f"🔐 Ваш код: {code}"
+            await bot.edit_message_text(
+                chat_id=user_id,
+                message_id=client_msg_id,
+                text=f"🎉 Заявка принята в обработку\n\n"
+                     f"🆔 ID: #{order_id}\n"
+                     f"💳 Услуга: Карта под оплату\n"
+                     f"💰 Сумма: {amount:.2f} RUB\n\n"
+                     f"📊 Статус: 🟢 IN PROGRESS\n"
+                     f"👨‍💻 Исполнитель: уже работает над заявкой\n\n"
+                     f"🔐 Ваш код: {code}"
             )
         except:
-            return await message.answer("❌ Не удалось отправить код клиенту")
+            pass
 
         # Удаляем сообщение воркера с кодом
         try:
@@ -779,6 +805,27 @@ async def text_handler(message: types.Message):
     )
     order_id = cur.fetchone()[0]
 
+    usdt = round(rub / 63.7, 2)
+    total = round(rub * 1.2, 2)
+
+    # Сообщение для клиента
+    client_msg = await message.answer(
+        f"🎉 Заявка принята в обработку\n\n"
+        f"🆔 ID: #{order_id}\n"
+        f"💳 Услуга: Карта под оплату\n"
+        f"💰 Сумма: {rub:.2f} RUB\n\n"
+        f"📊 Статус: 🟡 NEW\n"
+        f"👨‍💻 Исполнитель: назначается\n\n"
+        f"⏳ Ожидайте — мы уже взяли вашу заявку в работу и скоро свяжемся с вами"
+    )
+
+    # Сохраняем message_id клиента
+    cur.execute(
+        "UPDATE orders SET client_message_id=%s WHERE id=%s",
+        (client_msg.message_id, order_id)
+    )
+
+    # Рассылка воркерам
     text_order = (
         f"📥 Новая заявка #{order_id}\n\n"
         f"💳 Метод: Карта под оплату\n"
@@ -792,22 +839,11 @@ async def text_handler(message: types.Message):
         [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
     ])
 
-    # рассылка воркерам
     for w in workers:
         try:
             await bot.send_message(w, text_order, reply_markup=keyboard)
         except:
             pass
-
-    await message.answer(
-        f"🎉 Заявка принята в обработку\n\n"
-        f"🆔 ID: #{order_id}\n"
-        f"💳 Услуга: Карта под оплату\n"
-        f"💰 Сумма: {rub:.2f} RUB\n\n"
-        f"📊 Статус: NEW\n"
-        f"👨‍💻 Исполнитель: назначается\n\n"
-        f"⏳ Ожидайте — мы уже взяли вашу заявку в работу и скоро свяжемся с вами"
-    )
 
 # ===== ПРОВЕРКА ОПЛАТЫ =====
 async def check_payment_loop(user_id: int, invoice_id: int, to_credit: float):
@@ -867,8 +903,8 @@ async def take(call: types.CallbackQuery):
         (call.from_user.id, order_id)
     )
 
-    row = cur.execute(
-        "SELECT user_id FROM orders WHERE id=%s",
+    cur.execute(
+        "SELECT user_id, amount, client_message_id FROM orders WHERE id=%s",
         (order_id,)
     )
     row = cur.fetchone()
@@ -876,25 +912,38 @@ async def take(call: types.CallbackQuery):
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-    user_id = row[0]
+    user_id, amount, client_msg_id = row
 
-    client_keyboard = None
+    # Редактируем сообщение клиента
+    try:
+        await bot.edit_message_text(
+            chat_id=user_id,
+            message_id=client_msg_id,
+            text=f"🎉 Заявка принята в обработку\n\n"
+                 f"🆔 ID: #{order_id}\n"
+                 f"💳 Услуга: Карта под оплату\n"
+                 f"💰 Сумма: {amount:.2f} RUB\n\n"
+                 f"📊 Статус: 🟢 IN PROGRESS\n"
+                 f"👨‍💻 Исполнитель: уже работает над заявкой\n\n"
+                 f"⏳ Ожидайте реквизитов для оплаты"
+        )
+    except:
+        pass
 
-    await bot.send_message(
-        user_id,
-        f"🟢 Ваша заявка #{order_id} принята в работу\n\n"
-        f"👨‍💻 Исполнитель уже занимается вашим заказом\n"
-        f"⏳ Ожидайте реквизитов для оплаты"
-    )
-
-    # Кнопка для воркера — отправить реквизиты
+    # Сообщение воркеру
     worker_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")]
     ])
 
+    worker_msg = await call.message.answer("Заявка принята🔥", reply_markup=worker_keyboard)
+    
+    # Сохраняем message_id воркера
+    cur.execute(
+        "UPDATE orders SET worker_message_id=%s WHERE id=%s",
+        (worker_msg.message_id, order_id)
+    )
+
     await call.answer("Взял в работу ❤️")
-    await call.message.edit_reply_markup(reply_markup=None)
-    await call.message.answer("Заявка принята🔥", reply_markup=worker_keyboard)
 
 # ===== SEND REQUISITES — выбор карты =====
 @dp.callback_query(F.data.startswith("send_req_"))
@@ -931,7 +980,7 @@ async def req_card(call: types.CallbackQuery):
     order_id = int(parts[2])
     card_id = int(parts[3])
 
-    row = cur.execute(
+    cur.execute(
         "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=%s AND worker_id=%s",
         (card_id, call.from_user.id)
     )
@@ -942,29 +991,37 @@ async def req_card(call: types.CallbackQuery):
 
     number, expiry, cvv, bank = row
 
-    cur.execute("SELECT user_id FROM orders WHERE id=%s", (order_id,))
+    cur.execute("SELECT user_id, amount, client_message_id FROM orders WHERE id=%s", (order_id,))
     user_row = cur.fetchone()
 
     if not user_row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-    user_id = user_row[0]
+    user_id, amount, client_msg_id = user_row
 
+    # Редактируем сообщение клиента с реквизитами
     try:
-        await bot.send_message(
-            user_id,
-            f"💳 Реквизиты для оплаты\n\n"
-            f"🏦 Банк: {bank}\n"
-            f"💳 Номер карты: {number}\n"
-            f"📅 Срок: {expiry}\n"
-            f"🔐 CVV: {cvv}\n\n"
-            f"📥 Заявка #{order_id}",
+        await bot.edit_message_text(
+            chat_id=user_id,
+            message_id=client_msg_id,
+            text=f"🎉 Заявка принята в обработку\n\n"
+                 f"🆔 ID: #{order_id}\n"
+                 f"💳 Услуга: Карта под оплату\n"
+                 f"💰 Сумма: {amount:.2f} RUB\n\n"
+                 f"📊 Статус: 🟢 IN PROGRESS\n"
+                 f"👨‍💻 Исполнитель: уже работает над заявкой\n\n"
+                 f"💳 Реквизиты для оплаты:\n"
+                 f"🏦 Банк: {bank}\n"
+                 f"💳 Номер карты: {number}\n"
+                 f"📅 Срок: {expiry}\n"
+                 f"🔐 CVV: {cvv}\n\n"
+                 f"⏳ Ожидайте кода подтверждения",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
             ])
         )
     except:
-        return await call.answer("❌ Не удалось отправить реквизиты", show_alert=True)
+        pass
 
     await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
     await call.message.edit_reply_markup(reply_markup=None)
@@ -1030,8 +1087,8 @@ async def worker_confirm(call: types.CallbackQuery):
     order_id = int(call.data.split("_")[2])
     worker_id = call.from_user.id
 
-    row = cur.execute(
-        "SELECT user_id, amount, status FROM orders WHERE id=%s AND worker_id=%s",
+    cur.execute(
+        "SELECT user_id, amount, status, client_message_id FROM orders WHERE id=%s AND worker_id=%s",
         (order_id, worker_id)
     )
     row = cur.fetchone()
@@ -1039,7 +1096,7 @@ async def worker_confirm(call: types.CallbackQuery):
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-    user_id, amount, status = row
+    user_id, amount, status, client_msg_id = row
 
     if status == "DONE":
         return await call.answer("✅ Заявка уже завершена", show_alert=True)
@@ -1048,20 +1105,24 @@ async def worker_confirm(call: types.CallbackQuery):
     rate = await crypto_get_rate()
     total_usdt = round(total / rate, 4)
 
-    # Уведомляем клиента
+    # Редактируем сообщение клиента
     try:
-        await bot.send_message(
-            user_id,
-            f"💰 Исполнитель подтвердил получение оплаты!\n\n"
-            f"📥 Заявка #{order_id}\n"
-            f"💸 К списанию: {total_usdt:.4f} USDT ({total:.2f} RUB)\n\n"
-            f"Подтвердите оплату:",
+        await bot.edit_message_text(
+            chat_id=user_id,
+            message_id=client_msg_id,
+            text=f"🎉 Заявка принята в обработку\n\n"
+                 f"🆔 ID: #{order_id}\n"
+                 f"💳 Услуга: Карта под оплату\n"
+                 f"💰 Сумма: {amount:.2f} RUB\n\n"
+                 f"📊 Статус: 🟡 AWAITING CONFIRMATION\n"
+                 f"💸 К списанию: {total_usdt:.4f} USDT ({total:.2f} RUB)\n\n"
+                 f"⏳ Пожалуйста, подтвердите оплату",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"client_paid_{order_id}_{total_usdt}")]
             ])
         )
     except:
-        return await call.answer("❌ Не удалось отправить уведомление клиенту", show_alert=True)
+        pass
 
     await call.answer("✅ Запрос отправлен клиенту", show_alert=True)
     await call.message.edit_reply_markup(reply_markup=None)
@@ -1075,8 +1136,8 @@ async def client_paid(call: types.CallbackQuery):
     total_usdt = float(parts[3])
     uid = call.from_user.id
 
-    row = cur.execute(
-        "SELECT worker_id, amount, status FROM orders WHERE id=%s AND user_id=%s",
+    cur.execute(
+        "SELECT worker_id, amount, status, client_message_id FROM orders WHERE id=%s AND user_id=%s",
         (order_id, uid)
     )
     row = cur.fetchone()
@@ -1084,7 +1145,7 @@ async def client_paid(call: types.CallbackQuery):
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-    worker_id, amount, status = row
+    worker_id, amount, status, client_msg_id = row
 
     if status == "DONE":
         return await call.answer("✅ Заявка уже завершена", show_alert=True)
@@ -1112,6 +1173,22 @@ async def client_paid(call: types.CallbackQuery):
     client_balance_new = get_balance(uid)
     worker_balance = get_balance(worker_id)
 
+    # Редактируем сообщение клиента с финальным статусом
+    try:
+        await bot.edit_message_text(
+            chat_id=uid,
+            message_id=client_msg_id,
+            text=f"✅ Заявка #{order_id} завершена!\n\n"
+                 f"🆔 ID: #{order_id}\n"
+                 f"💳 Услуга: Карта под оплату\n"
+                 f"💰 Сумма: {amount:.2f} RUB\n\n"
+                 f"📊 Статус: ✅ DONE\n"
+                 f"💸 Списано: {total_usdt:.4f} USDT\n"
+                 f"💰 Ваш баланс: {client_balance_new:.4f} USDT"
+        )
+    except:
+        pass
+
     await call.answer("✅ Оплата подтверждена!", show_alert=True)
     await call.message.edit_reply_markup(reply_markup=None)
     await call.message.answer(
@@ -1131,9 +1208,24 @@ async def client_paid(call: types.CallbackQuery):
     except:
         pass
 
+async def keep_alive():
+    """Пингует самого себя каждые 10 минут чтобы не заснуть на Render."""
+    while True:
+        try:
+            await asyncio.sleep(600)  # 10 минут
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get("https://telega-7hqb.onrender.com/", timeout=aiohttp.ClientTimeout(total=5)):
+                        pass
+                except:
+                    pass
+        except:
+            pass
+
 # ===== MAIN =====
 async def main():
     load_workers()  # Загружаем воркеров из БД
+    asyncio.create_task(keep_alive())  # Запускаем пинг
     await run_web()
     await dp.start_polling(bot)
 
