@@ -13,7 +13,7 @@ from utils.shared import get_role, set_role, workers
 
 logger = logging.getLogger(__name__)
 
-# --- FSM СОСТОЯНИЯ ---
+# --- FSM СОСТОЯНИЯ --- 
 class ClientStates(StatesGroup):
     waiting_for_topup_amount = State()
     waiting_for_order_unique = State()
