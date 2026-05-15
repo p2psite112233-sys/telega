@@ -61,6 +61,11 @@ CREATE TABLE IF NOT EXISTS cards (
 )
 """)
 
+# Убедимся что колонка frozen существует
+cur.execute("ALTER TABLE balances ADD COLUMN IF NOT EXISTS frozen REAL DEFAULT 0.0")
+# Обнуляем NULL значения
+cur.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
+
 # ===== ХЕЛПЕРЫ =====
 def get_balance(user_id: int) -> float:
     cur.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
