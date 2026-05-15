@@ -38,14 +38,9 @@ def load_workers():
         workers.add(uid)
         users_role[uid] = "worker"
 
-BANNER_FILE_ID = "AgACAgIAAxkBAAFJrM1qBuTKSil9Vek1xGAYheksr44KYwAC7xJrG9R3OEgcHJTvwo7uaQEAAwIAA3kAAzsE"
+BANNER_FILE_ID = "AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ"
 
 def register_common(dp, bot):
-
-    @dp.message(F.photo)
-    async def get_photo_id(message: types.Message):
-        file_id = message.photo[-1].file_id
-        await message.answer(f"file_id:\n<code>{file_id}</code>", parse_mode="HTML")
 
     @dp.message(F.text == "/start")
     async def start(message: types.Message):
