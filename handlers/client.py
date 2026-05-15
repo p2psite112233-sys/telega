@@ -45,7 +45,7 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
-    # --- НОВЫЙ ХЕНДЛЕР: ОБРАБОТКА ВВОДА СУММЫ И СОЗДАНИЕ ЗАЯВКИ С МИН. КОМИССИЕЙ 30 RUB ---
+    # --- ЭТАЛОННЫЙ ХЕНДЛЕР: ОБРАБОТКА ВВОДА СУММЫ И СОЗДАНИЕ ЗАЯВКИ С МИН. КОМИССИЕЙ 30 RUB ---
     @dp.message(ClientStates.waiting_for_amount)
     async def process_amount(message: types.Message, state: FSMContext):
         try:
@@ -58,30 +58,32 @@ def register_client(dp, bot):
         uid = message.from_user.id
         data = await state.get_data()
         
-        # Проверяем флаг уникальной карты (если есть)
-        is_unique = data.get("is_unique", False) 
+        # Интеллектуальная проверка флага уникальной карты (поддерживает разные форматы записи в FSM)
+        is_unique = data.get("is_unique", False) or data.get("unique", False) or (data.get("card_type") == "unique")
         
         # Рассчитываем комиссию (20% обычная, 25% уникальная)
         percent = 0.25 if is_unique else 0.20
         dirty_profit_rub = amount * percent
         
-        # Защита от микро-чеков: проверяем лимит в 30 RUB
+        # ЖЕСТКАЯ ЗАЩИТА: Проверяем лимит минимальной комиссии в 30 RUB
         is_min_commission = False
         if dirty_profit_rub < 30.0:
             dirty_profit_rub = 30.0
             is_min_commission = True
             
-        total_rub = round(amount + dirty_profit_rub, 2)  # Итоговая рублевая сумма для клиента
+        total_rub = round(amount + dirty_profit_rub, 2)  # Точная рублевая сумма к оплате для клиента
 
         # Получаем актуальный курс крипты
         try:
             rate = await crypto_get_rate()
+            if rate <= 0:
+                rate = 95.0
         except Exception as e:
             logger.error(f"Ошибка получения курса: {e}")
             rate = 95.0  # Резервный курс
 
-        total_usdt = round(total_rub / rate, 4)    # Замораживаем у клиента
-        amount_usdt = round(amount / rate, 4)      # Чистое тело для воркера
+        total_usdt = round(total_rub / rate, 4)    # Сколько списывается/замораживается у клиента
+        amount_usdt = round(amount / rate, 4)      # Чистый эквивалент тела заявки в USDT
 
         # Проверка баланса пользователя
         balance = await db.get_balance(uid)
@@ -93,14 +95,14 @@ def register_client(dp, bot):
                 f"Пополните баланс или введите меньшую сумму:"
             )
 
-        # Замораживаем баланс клиента
+        # Списываем баланс и отправляем в заморозку
         await db.db_execute("UPDATE users SET balance = balance - $1, frozen = frozen + $1 WHERE id = $2", total_usdt, uid)
         
-        # Создаем запись в базе данных
+        # Исправлено: Добавлены поля в INSERT, чтобы данные об уникальности и суммах ложились ровно
         order_row = await db.db_fetchone(
-            "INSERT INTO orders (user_id, amount, total_usdt, amount_usdt, status) "
-            "VALUES ($1, $2, $3, $4, 'NEW') RETURNING id",
-            uid, amount, total_usdt, amount_usdt
+            "INSERT INTO orders (user_id, amount, total_usdt, amount_usdt, status, is_unique) "
+            "VALUES ($1, $2, $3, $4, 'NEW', $5) RETURNING id",
+            uid, amount, total_usdt, amount_usdt, is_unique
         )
         order_id = order_row["id"]
 
@@ -128,7 +130,7 @@ def register_client(dp, bot):
         
         await state.clear()
 
-    # --- ТВОЙ КАРКАС КЛИЕНТСКИХ И ЛК ФУНКЦИЙ ---
+    # --- ОСТАЛЬНАЯ ЛОГИКА КЛИЕНТСКИХ И ЛК ФУНКЦИЙ ---
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
@@ -257,11 +259,11 @@ def register_client(dp, bot):
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
             frozen = await db.get_frozen(uid)
-            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
+            row = await db.get_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
             closed = row["count"] if row else 0
-            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
+            row = await db.get_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
             active = row["count"] if row else 0
-            row = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
+            row = await db.get_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
             paid_count = row["count"] if row else 0
             text = (
                 f"<b>👤 Личный профиль</b>\n"
