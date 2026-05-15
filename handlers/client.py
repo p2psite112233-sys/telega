@@ -107,6 +107,11 @@ def register_client(dp, bot):
     async def lk_buttons(call: types.CallbackQuery):
         uid = call.from_user.id
 
+        try:
+            await call.message.delete()
+        except:
+            pass
+
         if call.data == "client_card":
             await call.message.answer_photo(
                 photo="AgACAgIAAxkBAAIC92oG8dC8NL-jzOBotlCM2XGM-i86AALcE2sbIOg5SDV64bApD116AQADAgADeQADOwQ",
@@ -359,4 +364,3 @@ def register_client(dp, bot):
             return await call.answer()
 
         await call.answer("🚧 Раздел в разработке", show_alert=True)
- 
