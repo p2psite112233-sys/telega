@@ -63,6 +63,7 @@ async def init_db():
         await conn.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_message_id BIGINT")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS worker_message_id BIGINT")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_usdt NUMERIC(18,8) DEFAULT 0.0")
 
     print("DB tables OK")
 
