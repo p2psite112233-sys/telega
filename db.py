@@ -72,16 +72,28 @@ def get_balance(user_id: int) -> float:
         with c.cursor() as cur2:
             cur2.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
             row = cur2.fetchone()
-    return row[0] if row else 0.0
+    return float(row[0]) if row and row[0] is not None else 0.0
 
 def get_frozen(user_id: int) -> float:
     with psycopg2.connect(DATABASE_URL) as c:
         with c.cursor() as cur2:
             cur2.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
             row = cur2.fetchone()
-    if not row or row[0] is None:
-        return 0.0
-    return float(row[0])
+    return float(row[0]) if row and row[0] is not None else 0.0
+
+def db_fetchone(query: str, params: tuple):
+    """Читает одну строку через свежее соединение."""
+    with psycopg2.connect(DATABASE_URL) as c:
+        with c.cursor() as cur2:
+            cur2.execute(query, params)
+            return cur2.fetchone()
+
+def db_fetchall(query: str, params: tuple):
+    """Читает все строки через свежее соединение."""
+    with psycopg2.connect(DATABASE_URL) as c:
+        with c.cursor() as cur2:
+            cur2.execute(query, params)
+            return cur2.fetchall()
 
 def add_balance(user_id: int, amount: float):
     cur.execute("""
