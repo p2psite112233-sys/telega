@@ -135,15 +135,15 @@ def register_client(dp, bot):
             unique = call.data == "card_unique_yes"
             waiting[uid] = {"unique": unique}
             extra = " (+5% за уникальность)" if unique else ""
-            await call.message.edit_caption(
+            await call.message.answer_photo(
+                photo=CARD_BANNER_FILE_ID,
                 caption=(
                     f"<b>💳 Карта под оплату</b>\n\n"
                     f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
                     f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
                     f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
                 ),
-                parse_mode="HTML",
-                reply_markup=None
+                parse_mode="HTML"
             )
             return await call.answer()
 
