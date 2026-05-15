@@ -93,7 +93,7 @@ def register_client(dp, bot):
         uid = call.from_user.id
 
         row = await db.db_fetchone(
-            "SELECT worker_id, amount, status, client_message_id, total_usdt FROM orders WHERE id=$1 AND user_id=$2",
+            "SELECT worker_id, amount, status, client_message_id, total_usdt, amount_usdt FROM orders WHERE id=$1 AND user_id=$2",
             order_id, uid
         )
         if not row:
@@ -104,11 +104,11 @@ def register_client(dp, bot):
         status = row["status"]
         client_msg_id = row["client_message_id"]
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
+        amount_usdt = float(row["amount_usdt"]) if row["amount_usdt"] else 0.0
 
         if status == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
-        # Сначала меняем статус, потом переводим деньги
         result = await db.db_execute(
             "UPDATE orders SET status='DONE' WHERE id=$1 AND status='IN_PROGRESS'",
             order_id
@@ -116,10 +116,11 @@ def register_client(dp, bot):
         if "UPDATE 0" in result:
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
-        await db.unfreeze_to_worker(uid, worker_id, total_usdt)
+        await db.unfreeze_to_worker(uid, worker_id, total_usdt, amount_usdt)
 
         client_balance_new = await db.get_balance(uid)
         worker_balance = await db.get_balance(worker_id)
+        worker_amount = round(amount_usdt + (total_usdt - amount_usdt) * 0.8, 4)
 
         try:
             await bot.edit_message_text(
@@ -128,17 +129,16 @@ def register_client(dp, bot):
                 text=f"✅ Заявка #{order_id} завершена!\n\n"
                      f"🆔 ID: #{order_id}\n"
                      f"💳 Услуга: Карта под оплату\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n\n"
-                     f"📊 Статус: ✅ DONE\n"
-                     f"💸 Списано: {total_usdt:.4f} USDT\n"
-                     f"💰 Ваш баланс: {client_balance_new:.4f} USDT"
+                     f"💰 Сумма: {amount:.2f} RUB\n"
+                     f"💸 Списано: {total_usdt:.4f} USDT\n\n"
+                     f"📊 Статус: ✅ Завершена\n"
+                     f"💰 Ваш баланс: {client_balance_new:.2f} USDT"
             )
         except Exception as e:
             logger.error(f"[client_paid] edit error: {e}")
 
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
-        worker_amount = round(total_usdt * 0.8, 4)
         try:
             await bot.send_message(
                 worker_id,
@@ -147,7 +147,7 @@ def register_client(dp, bot):
                 f"💳 Услуга: Карта под оплату\n"
                 f"💰 Сумма: {amount:.2f} RUB\n\n"
                 f"💎 Зачислено: {worker_amount:.4f} USDT\n"
-                f"💰 Ваш баланс: {worker_balance:.4f} USDT"
+                f"💰 Ваш баланс: {worker_balance:.2f} USDT"
             )
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
@@ -181,8 +181,8 @@ def register_client(dp, bot):
                 f"<b>👤 Личный профиль</b>\n"
                 f"<blockquote>{username} [{uid}]</blockquote>\n\n"
                 f"<b>💼 Финансы</b>\n"
-                f"• Баланс: <b>{balance:.4f} USDT</b>\n"
-                f"• Заморожено: <b>{frozen:.4f} USDT</b>\n\n"
+                f"• Баланс: <b>{balance:.2f} USDT</b>\n"
+                f"• Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
                 f"<b>📊 Статистика</b>\n"
                 f"• Закрыто заявок: {closed} шт\n"
                 f"• Активных заявок: {active} шт\n"
@@ -240,7 +240,7 @@ def register_client(dp, bot):
                 f"🛠 Профиль работника\n"
                 f"Ваш профиль: {username} [{uid}]\n\n"
                 f"💼 Финансы\n"
-                f"• Доступно для вывода: {balance:.4f} USDT\n\n"
+                f"• Доступно для вывода: {balance:.2f} USDT\n\n"
                 f"📊 Статистика\n"
                 f"• Обработано заявок: {done_count} шт\n"
                 f"• Активных заявок: {active_count} шт"
