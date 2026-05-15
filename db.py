@@ -25,7 +25,6 @@ async def init_db():
                 worker_id BIGINT,
                 client_message_id BIGINT,
                 worker_message_id BIGINT,
-                total_usdt NUMERIC(18,8) DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -61,8 +60,7 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # --- Блок миграций для уже существующих таблиц ---
+        # Миграции
         await conn.execute("ALTER TABLE balances ADD COLUMN IF NOT EXISTS frozen NUMERIC(18,8) DEFAULT 0.0")
         await conn.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_message_id BIGINT")
@@ -70,7 +68,7 @@ async def init_db():
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_usdt NUMERIC(18,8) DEFAULT 0.0")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         await conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-        
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_usdt NUMERIC(18,8) DEFAULT 0.0")
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS bot_profit (
                 id SERIAL PRIMARY KEY,
@@ -87,13 +85,7 @@ async def init_db():
             )
         """)
 
-        # --- Создание индексов для молниеносной статистики ---
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_profit_created_at ON bot_profit(created_at)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at)")
-        await conn.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_created_at ON withdrawals(created_at)")
-
-    print("DB tables and indexes OK")
+    print("DB tables OK")
 
 
 async def get_balance(user_id: int) -> float:
@@ -127,14 +119,20 @@ async def freeze_balance(user_id: int, amount: float) -> bool:
             """, amount, user_id)
     return True
 
-async def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
-    worker_amount = round(amount * 0.8, 8)
-    bot_amount = round(amount * 0.2, 8)
+async def unfreeze_to_worker(client_id: int, worker_id: int, total_usdt: float, amount_usdt: float = 0.0):
+    """
+    total_usdt = полная сумма с комиссией
+    amount_usdt = чистая сумма без комиссии
+    воркер получает: amount_usdt + commission * 0.8
+    """
+    commission_usdt = total_usdt - amount_usdt
+    worker_amount = round(amount_usdt + commission_usdt * 0.8, 8)
+    bot_amount = round(commission_usdt * 0.2, 8)
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
                 "UPDATE balances SET frozen = frozen - $1 WHERE user_id=$2 AND frozen >= $1",
-                amount, client_id
+                total_usdt, client_id
             )
             await conn.execute("""
                 INSERT INTO balances (user_id, balance) VALUES ($1, $2)
@@ -168,4 +166,3 @@ async def load_workers_from_db():
     async with pool.acquire() as conn:
         rows = await conn.fetch("SELECT user_id FROM workers")
     return [row["user_id"] for row in rows]
- 
