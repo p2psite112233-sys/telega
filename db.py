@@ -125,3 +125,4 @@ def unfreeze_back(user_id: int, amount: float):
     cur.execute("""
         UPDATE balances SET balance = balance + %s, frozen = frozen - %s WHERE user_id=%s
     """, (amount, amount, user_id))
+ 
