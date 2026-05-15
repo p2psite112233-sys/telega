@@ -19,8 +19,8 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ===== DB =====
-DATABASE_URL = os.getenv("DATABASE_URL")
-print(f"Connecting to DB: {DATABASE_URL[:30] if DATABASE_URL else 'NOT SET'}...")
+DATABASE_URL = os.getenv("DATABASE_URL", "").replace("[YOUR-PASSWORD]", os.getenv("DB_PASSWORD", ""))
+print(f"Connecting to DB: {DATABASE_URL[:40] if DATABASE_URL else 'NOT SET'}...")
 try:
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = True
