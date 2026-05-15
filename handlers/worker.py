@@ -111,6 +111,11 @@ def register_worker(dp, bot):
         except Exception as e:
             logger.error(f"[take] delete old msg error: {e}")
 
+        # Удаляем старое сообщение у воркера и отправляем новое
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.message.answer(
             f"✅ Вы взяли заказ #{order_id}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -140,6 +145,10 @@ def register_worker(dp, bot):
             ])
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.message.answer(f"💳 Выберите карту для заявки #{order_id}:", reply_markup=keyboard)
         await call.answer()
 
@@ -187,6 +196,10 @@ def register_worker(dp, bot):
             logger.error(f"[req_card] delete error: {e}")
 
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.message.answer(
             f"✅ Реквизиты по заявке #{order_id} отправлены",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -291,7 +304,9 @@ def register_worker(dp, bot):
         except Exception as e:
             logger.error(f"[worker_confirm] delete error: {e}")
 
-        await call.message.edit_reply_markup(reply_markup=None)
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.message.answer(f"⏳ Ожидаем подтверждения от клиента по заявке #{order_id}")
         await call.answer()
-  
