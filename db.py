@@ -68,15 +68,17 @@ cur.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
 
 # ===== ХЕЛПЕРЫ =====
 def get_balance(user_id: int) -> float:
-    with conn.cursor() as c:
-        c.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
-        row = c.fetchone()
+    with psycopg2.connect(DATABASE_URL) as c:
+        with c.cursor() as cur2:
+            cur2.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
+            row = cur2.fetchone()
     return row[0] if row else 0.0
 
 def get_frozen(user_id: int) -> float:
-    with conn.cursor() as c:
-        c.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
-        row = c.fetchone()
+    with psycopg2.connect(DATABASE_URL) as c:
+        with c.cursor() as cur2:
+            cur2.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
+            row = cur2.fetchone()
     if not row or row[0] is None:
         return 0.0
     return float(row[0])
