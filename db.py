@@ -68,32 +68,40 @@ cur.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
 
 # ===== ХЕЛПЕРЫ =====
 def get_balance(user_id: int) -> float:
-    with psycopg2.connect(DATABASE_URL) as c:
-        with c.cursor() as cur2:
-            cur2.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
-            row = cur2.fetchone()
+    c = psycopg2.connect(DATABASE_URL)
+    c.autocommit = True
+    cur2 = c.cursor()
+    cur2.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
+    row = cur2.fetchone()
+    c.close()
     return float(row[0]) if row and row[0] is not None else 0.0
 
 def get_frozen(user_id: int) -> float:
-    with psycopg2.connect(DATABASE_URL) as c:
-        with c.cursor() as cur2:
-            cur2.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
-            row = cur2.fetchone()
+    c = psycopg2.connect(DATABASE_URL)
+    c.autocommit = True
+    cur2 = c.cursor()
+    cur2.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
+    row = cur2.fetchone()
+    c.close()
     return float(row[0]) if row and row[0] is not None else 0.0
 
 def db_fetchone(query: str, params: tuple):
-    """Читает одну строку через свежее соединение."""
-    with psycopg2.connect(DATABASE_URL) as c:
-        with c.cursor() as cur2:
-            cur2.execute(query, params)
-            return cur2.fetchone()
+    c = psycopg2.connect(DATABASE_URL)
+    c.autocommit = True
+    cur2 = c.cursor()
+    cur2.execute(query, params)
+    row = cur2.fetchone()
+    c.close()
+    return row
 
 def db_fetchall(query: str, params: tuple):
-    """Читает все строки через свежее соединение."""
-    with psycopg2.connect(DATABASE_URL) as c:
-        with c.cursor() as cur2:
-            cur2.execute(query, params)
-            return cur2.fetchall()
+    c = psycopg2.connect(DATABASE_URL)
+    c.autocommit = True
+    cur2 = c.cursor()
+    cur2.execute(query, params)
+    rows = cur2.fetchall()
+    c.close()
+    return rows
 
 def add_balance(user_id: int, amount: float):
     cur.execute("""
