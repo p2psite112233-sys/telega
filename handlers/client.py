@@ -1,7 +1,8 @@
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from db import cur, get_balance, get_frozen, unfreeze_to_worker
+from db import cur, unfreeze_to_worker
+import db
 from utils.crypto import crypto_get_rate
 from handlers.common import waiting, waiting_topup, waiting_card
 
@@ -56,8 +57,8 @@ def register_client(dp, bot):
         if status == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
-        client_balance = get_balance(uid)
-        frozen = get_frozen(uid)
+        client_balance = db.get_balance(uid)
+        frozen = db.get_frozen(uid)
         if frozen < total_usdt and client_balance < total_usdt:
             return await call.answer(
                 f"❌ Недостаточно средств. Баланс: {client_balance:.4f} USDT",
@@ -68,8 +69,8 @@ def register_client(dp, bot):
         unfreeze_to_worker(uid, worker_id, total_usdt)
         cur.execute("UPDATE orders SET status='DONE' WHERE id=%s", (order_id,))
 
-        client_balance_new = get_balance(uid)
-        worker_balance = get_balance(worker_id)
+        client_balance_new = db.get_balance(uid)
+        worker_balance = db.get_balance(worker_id)
 
         try:
             await bot.edit_message_text(
@@ -153,8 +154,8 @@ def register_client(dp, bot):
             from handlers.common import PROFILE_BANNER_FILE_ID
             from db import db_fetchone, db_fetchall
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
-            balance = get_balance(uid)
-            frozen = get_frozen(uid)
+            balance = db.get_balance(uid)
+            frozen = db.get_frozen(uid)
             row = db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
             closed = row[0] if row else 0
             row = db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
@@ -220,7 +221,7 @@ def register_client(dp, bot):
 
         if call.data == "lk_home":
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
-            balance = get_balance(uid)
+            balance = db.get_balance(uid)
             cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='DONE'", (uid,))
             done_count = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='IN_PROGRESS'", (uid,))
