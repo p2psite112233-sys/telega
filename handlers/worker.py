@@ -294,3 +294,4 @@ def register_worker(dp, bot):
         await call.message.edit_reply_markup(reply_markup=None)
         await call.message.answer(f"⏳ Ожидаем подтверждения от клиента по заявке #{order_id}")
         await call.answer()
+ 
