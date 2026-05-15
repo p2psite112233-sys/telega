@@ -1,7 +1,7 @@
 """
 Точка входа. Весь код разбит по файлам:
 - config.py        — токены, константы
-- db.py            — PostgreSQL, таблицы, хелперы
+- db.py            — PostgreSQL asyncpg пул
 - utils/cards.py   — парсер карт
 - utils/crypto.py  — CryptoBot API
 - handlers/common.py  — /start, /setworker, text_handler
@@ -19,7 +19,7 @@ sys.stdout.reconfigure(line_buffering=True)
 print("==> Starting bot...", flush=True)
 
 from config import BOT_TOKEN
-import db
+from db import init_db
 from handlers.common import register_common, load_workers
 from handlers.worker import register_worker
 from handlers.client import register_client
@@ -51,7 +51,7 @@ async def keep_alive():
             async with aiohttp.ClientSession() as session:
                 try:
                     async with session.get(
-                        "https://telega-7hqb.onrender.com/",
+                        "https://telega-3gkk.onrender.com/",
                         timeout=aiohttp.ClientTimeout(total=5)
                     ):
                         pass
@@ -61,7 +61,8 @@ async def keep_alive():
             pass
 
 async def main():
-    load_workers()
+    await init_db()  # Инициализируем БД
+    await load_workers()  # Загружаем воркеров
     asyncio.create_task(keep_alive())
     await run_web()
     await dp.start_polling(bot)
