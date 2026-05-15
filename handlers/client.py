@@ -135,7 +135,7 @@ def register_client(dp, bot):
             unique = call.data == "card_unique_yes"
             waiting[uid] = {"unique": unique}
             extra = " (+5% за уникальность)" if unique else ""
-            await call.message.answer_photo(
+            msg = await call.message.answer_photo(
                 photo=CARD_BANNER_FILE_ID,
                 caption=(
                     f"<b>💳 Карта под оплату</b>\n\n"
@@ -145,6 +145,9 @@ def register_client(dp, bot):
                 ),
                 parse_mode="HTML"
             )
+            # Сохраняем message_id чтобы удалить после ввода суммы
+            from handlers.common import pending_code_msg
+            pending_code_msg[f"sum_{uid}"] = msg.message_id
             return await call.answer()
 
         if call.data == "client_topup":
