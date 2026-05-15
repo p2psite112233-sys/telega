@@ -42,6 +42,11 @@ BANNER_FILE_ID = "AgACAgIAAxkBAAFJrM1qBuTKSil9Vek1xGAYheksr44KYwAC7xJrG9R3OEgcHJ
 
 def register_common(dp, bot):
 
+    @dp.message(F.photo)
+    async def get_photo_id(message: types.Message):
+        file_id = message.photo[-1].file_id
+        await message.answer(f"file_id:\n<code>{file_id}</code>", parse_mode="HTML")
+
     @dp.message(F.text == "/start")
     async def start(message: types.Message):
         role = get_role(message.from_user.id)
