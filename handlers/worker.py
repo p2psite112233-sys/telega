@@ -15,18 +15,30 @@ class WorkerStates(StatesGroup):
     waiting_for_code = State()
 
 def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = False) -> str:
-    """Форматирует информацию о заявке для воркера"""
+    """Форматирует информацию о заявке для воркера по твоей математике"""
+    # 1. Рублевая математика (Пример: 100р заявка -> 120р клиент -> 20р спред -> 16р воркеру)
     total_rub = round(amount * (1.25 if unique else 1.20), 2)
-    worker_usdt = round(total_usdt * 0.8, 4)
+    dirty_profit_rub = total_rub - amount
+    worker_profit_rub = dirty_profit_rub * 0.80
+
+    # 2. Перевод в USDT по реальному курсу заявки
+    rate = total_rub / total_usdt if total_usdt > 0 else 1.0
+    amount_usdt = round(amount / rate, 4)
+    worker_profit_usdt = round(worker_profit_rub / rate, 4)
+    
+    # Итого к начислению воркеру (Тело + 80% от спреда)
+    worker_total_payout = amount_usdt + worker_profit_usdt 
+
     unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
+    
     return (
         f"🆔 <b>ID заявки:</b> #{order_id}\n"
         f"💳 <b>Услуга:</b> Карта под оплату\n"
-        f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-        f"💲 <b>Резерв:</b> {total_usdt:.4f} USDT\n"
-        f"💎 <b>К оплате клиентом:</b> {total_rub:.2f} RUB\n"
-        f"🃏 {unique_text}\n"
-        f"💵 <b>Ваш чистый заработок:</b> {worker_usdt:.4f} USDT"
+        f"🃏 {unique_text}\n\n"
+        f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB (~{amount_usdt:.4f} USDT)\n"
+        f"💎 <b>Клиент оплатит:</b> {total_rub:.2f} RUB\n\n"
+        f"💵 <b>Ваш чистый заработок:</b> +{worker_profit_rub:.2f} RUB (+{worker_profit_usdt:.4f} USDT)\n"
+        f"📈 <b>Итог к зачислению вам:</b> <b>{worker_total_payout:.4f} USDT</b>"
     )
 
 
@@ -69,7 +81,7 @@ def register_worker(dp, bot):
                 parse_mode="HTML"
             )
 
-        # --- Кабинет Воркера (С косметикой и баннером) ---
+        # --- Кабинет Воркера с косметикой ---
         w_done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
         w_active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
 
