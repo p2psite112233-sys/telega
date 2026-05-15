@@ -34,7 +34,7 @@ async def broadcast_order(bot: Bot, text: str, kb: InlineKeyboardMarkup):
     """Рассылка воркерам с защитой от лимитов Telegram"""
     for w_id in workers:
         try:
-            await bot.send_message(w_id, text, reply_markup=kb)
+            await bot.send_message(w_id, text, reply_markup=kb, parse_mode="HTML")
             await asyncio.sleep(0.05)
         except Exception as e:
             logger.error(f"Broadcast error to {w_id}: {e}")
@@ -171,19 +171,19 @@ def register_common(dp, bot: Bot):
     async def order_unique_selected(call: types.CallbackQuery, state: FSMContext):
         unique = call.data == "card_unique_yes"
         await state.set_state(ClientStates.waiting_for_order_amount)
-        await state.update_data(unique=unique)
         extra = " (+5% за уникальность)" if unique else ""
         try:
             await call.message.delete()
         except:
             pass
-        await call.message.answer(
+        msg = await call.message.answer(
             f"<b>💳 Карта под оплату</b>\n\n"
             f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
             f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
             f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>",
             parse_mode="HTML"
         )
+        await state.update_data(unique=unique, sum_msg_id=msg.message_id)
         await call.answer()
 
     @dp.message(ClientStates.waiting_for_order_amount)
@@ -198,12 +198,19 @@ def register_common(dp, bot: Bot):
         uid = message.from_user.id
         data = await state.get_data()
         unique = data.get("unique", False)
+        sum_msg_id = data.get("sum_msg_id")
         await state.clear()
 
+        # Удаляем сообщение с суммой и введённое число
         try:
             await message.delete()
         except:
             pass
+        if sum_msg_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=sum_msg_id)
+            except:
+                pass
 
         if unique:
             total = round(rub * 1.25, 2)
@@ -353,4 +360,3 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
             except:
                 pass
             return
- 
