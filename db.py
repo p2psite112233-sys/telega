@@ -67,8 +67,38 @@ def get_balance(user_id: int) -> float:
     row = cur.fetchone()
     return row[0] if row else 0.0
 
+def get_frozen(user_id: int) -> float:
+    cur.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
+    row = cur.fetchone()
+    return row[0] if row else 0.0
+
 def add_balance(user_id: int, amount: float):
     cur.execute("""
         INSERT INTO balances (user_id, balance) VALUES (%s, %s)
         ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + %s
     """, (user_id, amount, amount))
+
+def freeze_balance(user_id: int, amount: float) -> bool:
+    """Замораживает сумму на балансе. Возвращает False если недостаточно средств."""
+    cur.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
+    row = cur.fetchone()
+    if not row or row[0] < amount:
+        return False
+    cur.execute("""
+        UPDATE balances SET balance = balance - %s, frozen = frozen + %s WHERE user_id=%s
+    """, (amount, amount, user_id))
+    return True
+
+def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
+    """Списывает с frozen клиента и зачисляет воркеру."""
+    cur.execute("UPDATE balances SET frozen = frozen - %s WHERE user_id=%s", (amount, client_id))
+    cur.execute("""
+        INSERT INTO balances (user_id, balance) VALUES (%s, %s)
+        ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + %s
+    """, (worker_id, amount, amount))
+
+def unfreeze_back(user_id: int, amount: float):
+    """Возвращает замороженную сумму обратно на баланс (отмена заявки)."""
+    cur.execute("""
+        UPDATE balances SET balance = balance + %s, frozen = frozen - %s WHERE user_id=%s
+    """, (amount, amount, user_id))
