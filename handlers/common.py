@@ -110,9 +110,6 @@ def register_common(dp, bot):
     @dp.message(F.text & ~F.text.startswith("/"))
     async def text_handler(message: types.Message):
         uid = message.from_user.id
-        # DEBUG
-        if message.from_user.id == ADMIN_ID or True:
-            await message.answer(f"DEBUG: waiting={waiting.get(uid)} topup={waiting_topup.get(uid)} card={waiting_card.get(uid)} bank={uid in waiting_bank} code={uid in pending_code}")
 
         # 1. Воркер вводит код
         if uid in pending_code:
