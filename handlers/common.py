@@ -3,7 +3,7 @@ from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 import db
-from config import ADMIN_ID
+from config import ADMIN_ID, BANNER_FILE_ID, PROFILE_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate, crypto_create_invoice
 from utils.cards import parse_card
 
@@ -21,9 +21,6 @@ menu = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="💳 Карта под оплату")]],
     resize_keyboard=True
 )
-
-BANNER_FILE_ID = "AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ"
-PROFILE_BANNER_FILE_ID = "AgACAgIAAxkBAAIC22oG60BMhrR_cGdSTWlUOlceSuYSAAKaE2sbIOg5SIkS3QUK926nAQADAgADeQADOwQ"
 
 def set_role(user_id: int, role: str):
     users_role[user_id] = role
@@ -341,4 +338,3 @@ async def check_payment_loop(bot, user_id: int, invoice_id: int, to_credit: floa
             except:
                 pass
             return
- 
