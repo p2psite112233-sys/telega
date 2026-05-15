@@ -138,11 +138,15 @@ def register_client(dp, bot):
 
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
+        worker_amount = round(total_usdt * 0.8, 4)
         try:
             await bot.send_message(
                 worker_id,
                 f"✅ Заявка #{order_id} завершена!\n\n"
-                f"💎 Зачислено: {total_usdt:.4f} USDT\n"
+                f"🆔 ID: #{order_id}\n"
+                f"💳 Услуга: Карта под оплату\n"
+                f"💰 Сумма: {amount:.2f} RUB\n\n"
+                f"💎 Зачислено: {worker_amount:.4f} USDT\n"
                 f"💰 Ваш баланс: {worker_balance:.4f} USDT"
             )
         except Exception as e:
