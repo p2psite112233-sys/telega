@@ -1,4 +1,4 @@
-""" 
+"""
 Точка входа. Весь код разбит по файлам:
 - config.py        — токены, константы
 - db.py            — PostgreSQL asyncpg пул
@@ -23,12 +23,14 @@ from db import init_db
 from handlers.common import register_common, load_workers
 from handlers.worker import register_worker
 from handlers.client import register_client
+from handlers.admin import register_admin
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 register_client(dp, bot)
 register_worker(dp, bot)
+register_admin(dp, bot)
 register_common(dp, bot)
 
 
