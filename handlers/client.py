@@ -2,6 +2,7 @@ from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import db
+from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import waiting, waiting_topup, waiting_card
 
@@ -41,11 +42,10 @@ def register_client(dp, bot):
     async def client_paid(call: types.CallbackQuery):
         parts = call.data.split("_")
         order_id = int(parts[2])
-        total_usdt = float(parts[3])
         uid = call.from_user.id
 
         row = await db.db_fetchone(
-            "SELECT worker_id, amount, status, client_message_id FROM orders WHERE id=$1 AND user_id=$2",
+            "SELECT worker_id, amount, status, client_message_id, total_usdt FROM orders WHERE id=$1 AND user_id=$2",
             order_id, uid
         )
         if not row:
@@ -55,16 +55,20 @@ def register_client(dp, bot):
         amount = float(row["amount"])
         status = row["status"]
         client_msg_id = row["client_message_id"]
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
 
         if status == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
-        # Берём total_usdt из заявки (зафиксирован при создании)
-        row2 = await db.db_fetchone("SELECT total_usdt FROM orders WHERE id=$1", order_id)
-        total_usdt = float(row2["total_usdt"]) if row2 and row2["total_usdt"] else total_usdt
+        # Сначала меняем статус, потом переводим деньги
+        result = await db.db_execute(
+            "UPDATE orders SET status='DONE' WHERE id=$1 AND status='IN_PROGRESS'",
+            order_id
+        )
+        if "UPDATE 0" in result:
+            return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
         await db.unfreeze_to_worker(uid, worker_id, total_usdt)
-        await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1", order_id)
 
         client_balance_new = await db.get_balance(uid)
         worker_balance = await db.get_balance(worker_id)
@@ -81,8 +85,8 @@ def register_client(dp, bot):
                      f"💸 Списано: {total_usdt:.4f} USDT\n"
                      f"💰 Ваш баланс: {client_balance_new:.4f} USDT"
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"[client_paid] edit error: {e}")
 
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
@@ -93,11 +97,11 @@ def register_client(dp, bot):
                 f"💎 Зачислено: {total_usdt:.4f} USDT\n"
                 f"💰 Ваш баланс: {worker_balance:.4f} USDT"
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"[client_paid] send_message error: {e}")
 
     @dp.callback_query(
-        (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_"))
+        (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_"))
         & ~F.data.startswith("client_paid_")
     )
     async def lk_buttons(call: types.CallbackQuery):
@@ -148,16 +152,15 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "client_profile":
-            from handlers.common import PROFILE_BANNER_FILE_ID
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
             frozen = await db.get_frozen(uid)
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
-            closed = row[0] if row else 0
+            closed = row["count"] if row else 0
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
-            active = row[0] if row else 0
+            active = row["count"] if row else 0
             row = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
-            paid_count = row[0] if row else 0
+            paid_count = row["count"] if row else 0
             text = (
                 f"<b>👤 Личный профиль</b>\n"
                 f"<blockquote>{username} [{uid}]</blockquote>\n\n"
@@ -214,9 +217,9 @@ def register_client(dp, bot):
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
-            done_count = row[0] if row else 0
+            done_count = row["count"] if row else 0
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
-            active_count = row[0] if row else 0
+            active_count = row["count"] if row else 0
             text = (
                 f"🛠 Профиль работника\n"
                 f"Ваш профиль: {username} [{uid}]\n\n"
@@ -304,20 +307,55 @@ def register_client(dp, bot):
                 )
             return await call.answer()
 
-        if call.data == "lk_history":
+        if call.data == "client_history":
             orders = await db.db_fetchall(
-                "SELECT id, amount, total_usdt FROM orders WHERE worker_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 20",
+                "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 20",
                 uid
             )
             if not orders:
                 await call.message.answer("📚 История заявок пуста")
                 return await call.answer()
-            text = "📚 История заявок (последние 20)\n\n"
+            buttons = []
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
-                text += f"✅ #{order['id']} — {float(order['amount']):.2f} RUB → {total_usdt:.4f} USDT\n"
-            await call.message.answer(text)
+                buttons.append([InlineKeyboardButton(
+                    text=f"✅ #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.4f} USDT",
+                    callback_data=f"history_order_{order['id']}"
+                )])
+            buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            await call.message.answer_photo(
+                photo="AgACAgIAAxkBAAIC22oG60BMhrR_cGdSTWlUOlceSuYSAAKaE2sbIOg5SIkS3QUK926nAQADAgADeQADOwQ",
+                caption=(
+                    "<b>📚 История клиента</b>\n\n"
+                    "<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>"
+                ),
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            return await call.answer()
+
+        if call.data.startswith("history_order_"):
+            order_id = int(call.data.split("_")[2])
+            row = await db.db_fetchone(
+                "SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND user_id=$2",
+                order_id, uid
+            )
+            if not row:
+                return await call.answer("❌ Заявка не найдена", show_alert=True)
+            total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]
+            ])
+            await call.message.answer(
+                f"<b>📋 Заявка #{row['id']}</b>\n\n"
+                f"💳 Услуга: Карта под оплату\n"
+                f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
+                f"💸 Списано: {total_usdt:.4f} USDT\n"
+                f"📊 Статус: ✅ DONE",
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
             return await call.answer()
 
         await call.answer("🚧 Раздел в разработке", show_alert=True)
- 
