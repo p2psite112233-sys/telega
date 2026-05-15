@@ -186,7 +186,8 @@ def register_worker(dp, bot):
                  f"⏳ После оплаты запросите код подтверждения",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
+                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
             ])
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
@@ -234,14 +235,19 @@ def register_worker(dp, bot):
         if not order:
             return await call.answer("❌ Нет доступа", show_alert=True)
         await state.set_state(WorkerStates.waiting_for_code)
-        await state.update_data(active_order_id=order_id)
-        await call.message.answer("🔐 Введите код для клиента одним сообщением:")
+        try:
+            await call.message.delete()
+        except:
+            pass
+        msg = await call.message.answer("🔐 Введите код для клиента одним сообщением:")
+        await state.update_data(active_order_id=order_id, ask_code_msg_id=msg.message_id)
         await call.answer()
 
     @dp.message(WorkerStates.waiting_for_code)
     async def process_code(message: types.Message, state: FSMContext):
         data = await state.get_data()
         order_id = data.get("active_order_id")
+        ask_code_msg_id = data.get("ask_code_msg_id")
         code = message.text.strip()
 
         row = await db.db_fetchone("SELECT user_id, client_message_id FROM orders WHERE id=$1", order_id)
@@ -252,24 +258,39 @@ def register_worker(dp, bot):
         user_id = row["user_id"]
         client_msg_id = row["client_message_id"]
 
+        # Удаляем сообщение "Введите код" и введённый код
+        if ask_code_msg_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=ask_code_msg_id)
+            except:
+                pass
+        try:
+            await message.delete()
+        except:
+            pass
+
         new_msg = await bot.send_message(
             chat_id=user_id,
             text=f"🎉 Заявка #{order_id}\n\n"
                  f"📊 Статус: 🟢 В работе\n\n"
                  f"🔐 Код подтверждения: <code>{code}</code>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
+            ])
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
         try:
             await bot.delete_message(chat_id=user_id, message_id=client_msg_id)
         except Exception as e:
             logger.error(f"[process_code] delete error: {e}")
-        try:
-            await message.delete()
-        except:
-            pass
 
-        await message.answer(f"✅ Код отправлен клиенту по заявке #{order_id}")
+        await message.answer(
+            f"✅ Код отправлен клиенту по заявке #{order_id}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order_id}")]
+            ])
+        )
         await state.clear()
 
     @dp.callback_query(F.data.startswith("worker_confirm_"))
