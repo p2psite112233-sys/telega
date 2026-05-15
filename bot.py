@@ -619,6 +619,62 @@ async def lk_buttons(call: types.CallbackQuery):
         )
         return
 
+    if call.data == "lk_active":
+        uid = call.from_user.id
+        cur.execute(
+            "SELECT id, amount, status, user_id FROM orders WHERE worker_id=%s AND status='IN_PROGRESS' ORDER BY id DESC",
+            (uid,)
+        )
+        orders = cur.fetchall()
+
+        if not orders:
+            await call.message.answer("🟢 Активных заявок нет")
+            return await call.answer()
+
+        for order in orders:
+            oid, amount, status, user_id = order
+            total = round(amount * 1.2, 2)
+            rate = await crypto_get_rate()
+            total_usdt = round(total / rate, 4)
+
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{oid}")],
+                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{oid}")]
+            ])
+
+            await call.message.answer(
+                f"🟢 Заявка #{oid}\n\n"
+                f"💰 Сумма: {amount:.2f} RUB\n"
+                f"💎 К получению: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
+                f"📊 Статус: {status}",
+                reply_markup=keyboard
+            )
+
+        return await call.answer()
+
+    if call.data == "lk_history":
+        uid = call.from_user.id
+        cur.execute(
+            "SELECT id, amount, status FROM orders WHERE worker_id=%s AND status='DONE' ORDER BY id DESC LIMIT 20",
+            (uid,)
+        )
+        orders = cur.fetchall()
+
+        if not orders:
+            await call.message.answer("📚 История заявок пуста")
+            return await call.answer()
+
+        text = "📚 История заявок (последние 20)\n\n"
+        for order in orders:
+            oid, amount, status = order
+            total = round(amount * 1.2, 2)
+            rate = await crypto_get_rate()
+            total_usdt = round(total / rate, 4)
+            text += f"✅ #{oid} — {amount:.2f} RUB → {total_usdt:.4f} USDT\n"
+
+        await call.message.answer(text)
+        return await call.answer()
+
     await call.answer("🚧 Раздел в разработке", show_alert=True)
 
 # ===== NEW ORDER =====
