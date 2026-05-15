@@ -153,6 +153,7 @@ def register_client(dp, bot):
             from handlers.common import PROFILE_BANNER_FILE_ID
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = get_balance(uid)
+            frozen = get_frozen(uid)
             cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
             closed = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
@@ -164,7 +165,7 @@ def register_client(dp, bot):
                 f"<blockquote>{username} [{uid}]</blockquote>\n\n"
                 f"<b>💼 Финансы</b>\n"
                 f"• Баланс: <b>{balance:.4f} USDT</b>\n"
-                f"• Заморожено: 0.00 USDT\n\n"
+                f"• Заморожено: <b>{frozen:.4f} USDT</b>\n\n"
                 f"<b>📊 Статистика</b>\n"
                 f"• Закрыто заявок: {closed} шт\n"
                 f"• Активных заявок: {active} шт\n"
@@ -338,4 +339,3 @@ def register_client(dp, bot):
             return await call.answer()
 
         await call.answer("🚧 Раздел в разработке", show_alert=True)
- 
