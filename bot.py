@@ -278,7 +278,7 @@ async def set_worker(message: types.Message):
         set_role(user_id, "worker")
         # Сохраняем в БД
         cur.execute("INSERT INTO workers (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
-            await message.answer(f"✅ Worker назначен: {user_id}")
+        await message.answer(f"✅ Worker назначен: {user_id}")
     except:
         await message.answer("Ошибка ID")
 
@@ -382,18 +382,12 @@ async def lk_buttons(call: types.CallbackQuery):
         balance = get_balance(uid)
 
         # Статистика из БД
-        closed = cur.execute(
-            "SELECT COUNT(*) FROM orders WHERE user_id=? AND status='DONE'", (uid,)
-        )
-        cur.fetchone()[0]
-        active = cur.execute(
-            "SELECT COUNT(*) FROM orders WHERE user_id=? AND status='IN_PROGRESS'", (uid,)
-        )
-        cur.fetchone()[0]
-        paid_count = cur.execute(
-            "SELECT COUNT(*) FROM invoices WHERE user_id=? AND status='paid'", (uid,)
-        )
-        cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
+        closed = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
+        active = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
+        paid_count = cur.fetchone()[0]
 
         text = (
             f"👤 Профиль клиента\n"
@@ -454,10 +448,8 @@ async def lk_buttons(call: types.CallbackQuery):
 
     if call.data == "lk_cards":
         uid = call.from_user.id
-        cards = cur.execute(
-            "SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,)
-        )
-        result = cur.fetchall()
+        cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
+        cards = cur.fetchall()
 
         card_count = len(cards)
 
@@ -572,10 +564,8 @@ async def lk_buttons(call: types.CallbackQuery):
 
         # Возвращаем к списку карт
         uid = call.from_user.id
-        cards = cur.execute(
-            "SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,)
-        )
-        result = cur.fetchall()
+        cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
+        cards = cur.fetchall()
 
         card_buttons = []
         for card in cards:
@@ -817,16 +807,16 @@ async def check_payment_loop(user_id: int, invoice_id: int, to_credit: float):
 
         if status == "paid":
             # Проверяем что не зачислили уже
-            row = cur.execute(
+            cur.execute(
                 "SELECT status FROM invoices WHERE invoice_id=%s", (invoice_id,)
             )
-        row = cur.fetchone()
+            row = cur.fetchone()
             if row and row[0] == "active":
                 add_balance(user_id, to_credit)
                 cur.execute(
                     "UPDATE invoices SET status='paid' WHERE invoice_id=%s", (invoice_id,)
                 )
-                            balance = get_balance(user_id)
+                balance = get_balance(user_id)
                 try:
                     await bot.send_message(
                         user_id,
@@ -842,7 +832,7 @@ async def check_payment_loop(user_id: int, invoice_id: int, to_credit: float):
             cur.execute(
                 "UPDATE invoices SET status='expired' WHERE invoice_id=%s", (invoice_id,)
             )
-                    try:
+            try:
                 await bot.send_message(
                     user_id,
                     f"❌ Инвойс #{invoice_id} истёк. Создайте новый через /lk"
@@ -870,7 +860,7 @@ async def take(call: types.CallbackQuery):
         "SELECT user_id FROM orders WHERE id=%s",
         (order_id,)
     )
-        row = cur.fetchone()
+    row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -901,10 +891,8 @@ async def send_req(call: types.CallbackQuery):
     order_id = int(call.data.split("_")[2])
     uid = call.from_user.id
 
-    cards = cur.execute(
-        "SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=%s", (uid,)
-    )
-        result = cur.fetchall()
+    cur.execute("SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=%s", (uid,))
+    cards = cur.fetchall()
 
     if not cards:
         return await call.answer("❌ У вас нет карт. Добавьте карту в /lk", show_alert=True)
@@ -936,7 +924,7 @@ async def req_card(call: types.CallbackQuery):
         "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=%s AND worker_id=%s",
         (card_id, call.from_user.id)
     )
-        row = cur.fetchone()
+    row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Карта не найдена", show_alert=True)
@@ -946,7 +934,7 @@ async def req_card(call: types.CallbackQuery):
     user_row = cur.execute(
         "SELECT user_id FROM orders WHERE id=%s", (order_id,)
     )
-        row = cur.fetchone()
+    row = cur.fetchone()
 
     if not user_row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -987,7 +975,7 @@ async def request_code(call: types.CallbackQuery):
         "SELECT worker_id FROM orders WHERE id=%s",
         (order_id,)
     )
-        row = cur.fetchone()
+    row = cur.fetchone()
 
     if not row or row[0] is None:
         return await call.answer("❌ Нет исполнителя", show_alert=True)
@@ -1037,7 +1025,7 @@ async def worker_confirm(call: types.CallbackQuery):
         "SELECT user_id, amount, status FROM orders WHERE id=%s AND worker_id=%s",
         (order_id, worker_id)
     )
-        row = cur.fetchone()
+    row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -1082,7 +1070,7 @@ async def client_paid(call: types.CallbackQuery):
         "SELECT worker_id, amount, status FROM orders WHERE id=%s AND user_id=%s",
         (order_id, uid)
     )
-        row = cur.fetchone()
+    row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -1142,4 +1130,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
