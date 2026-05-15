@@ -284,6 +284,10 @@ def register_common(dp, bot):
 
         unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
 
+        client_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
+        ])
+
         client_msg = await message.answer(
             f"🎉 Заявка принята в обработку\n\n"
             f"🆔 ID: #{order_id}\n"
@@ -291,9 +295,10 @@ def register_common(dp, bot):
             f"💰 Сумма: {rub:.2f} RUB\n"
             f"💎 К оплате: {total:.2f} RUB\n"
             f"🃏 {unique_text}\n\n"
-            f"📊 Статус: 🟡 NEW\n"
+            f"📊 Статус: 🟡 Новая\n"
             f"👨‍💻 Исполнитель: назначается\n\n"
-            f"⏳ Ожидайте — скоро свяжемся с вами"
+            f"⏳ Ожидайте — скоро свяжемся с вами",
+            reply_markup=client_keyboard
         )
 
         await db.db_execute(
