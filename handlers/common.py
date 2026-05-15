@@ -258,10 +258,11 @@ def register_common(dp, bot):
             unique = order_data.get("unique", False)
 
         if unique:
-            rub_total = round(rub * 1.25, 2)  # 20% комиссия + 5% уникальность
+            rub_total = round(rub * 1.25, 2)
         else:
-            rub_total = round(rub * 1.2, 2)  # 20% комиссия
+            rub_total = round(rub * 1.2, 2)
 
+        total = rub_total
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
         usdt = round(rub / rate, 4)
@@ -348,4 +349,3 @@ async def check_payment_loop(bot, user_id: int, invoice_id: int, to_credit: floa
             except:
                 pass
             return
- 
