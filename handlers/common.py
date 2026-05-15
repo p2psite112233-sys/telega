@@ -39,6 +39,7 @@ def load_workers():
         users_role[uid] = "worker"
 
 BANNER_FILE_ID = "AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ"
+PROFILE_BANNER_FILE_ID = "AgACAgIAAxkBAAIC22oG60BMhrR_cGdSTWlUOlceSuYSAAKaE2sbIOg5SIkS3QUK926nAQADAgADeQADOwQ"
 
 def register_common(dp, bot):
 
