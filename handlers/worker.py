@@ -1,7 +1,7 @@
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from db import cur, get_balance, add_balance
+import db
 from utils.crypto import crypto_get_rate
 from handlers.common import pending_code, pending_code_msg, waiting_card, workers
 
@@ -15,23 +15,21 @@ def register_worker(dp, bot):
         role = get_role(uid)
 
         if role not in ["worker", "admin"]:
-            # Клиент — показываем личный кабинет
-            from db import get_balance
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
-            balance = get_balance(uid)
-            cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
-            closed = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
-            active = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
-            paid_count = cur.fetchone()[0]
+            balance = await db.get_balance(uid)
+            frozen = await db.get_frozen(uid)
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
+            closed = row["count"] if row else 0
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
+            active = row["count"] if row else 0
+            row = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
+            paid_count = row["count"] if row else 0
             text = (
                 f"<b>👤 Личный профиль</b>\n"
                 f"<blockquote>{username} [{uid}]</blockquote>\n\n"
                 f"<b>💼 Финансы</b>\n"
                 f"• Баланс: <b>{balance:.4f} USDT</b>\n"
-                f"• Заморожено: 0.00 USDT\n\n"
+                f"• Заморожено: <b>{frozen:.4f} USDT</b>\n\n"
                 f"<b>📊 Статистика</b>\n"
                 f"• Закрыто заявок: {closed} шт\n"
                 f"• Активных заявок: {active} шт\n"
@@ -51,19 +49,17 @@ def register_worker(dp, bot):
             return
 
         username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
-        balance = get_balance(uid)
-
-        cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='DONE'", (uid,))
-        done_count = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='IN_PROGRESS'", (uid,))
-        active_count = cur.fetchone()[0]
+        balance = await db.get_balance(uid)
+        row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
+        done_count = row["count"] if row else 0
+        row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
+        active_count = row["count"] if row else 0
 
         text = (
             f"🛠 Профиль работника\n"
             f"Ваш профиль: {username} [{uid}]\n\n"
             f"💼 Финансы\n"
-            f"• Доступно для вывода: {balance:.4f} USDT\n"
-            f"• Заморожено: 0.00 USDT\n\n"
+            f"• Доступно для вывода: {balance:.4f} USDT\n\n"
             f"📊 Статистика\n"
             f"• Обработано заявок: {done_count} шт\n"
             f"• Активных заявок: {active_count} шт"
@@ -78,7 +74,6 @@ def register_worker(dp, bot):
             [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
             [InlineKeyboardButton(text="🏠 В меню", callback_data="lk_menu")]
         ])
-
         await message.answer(text, reply_markup=keyboard)
 
     @dp.callback_query(F.data.startswith("take_"))
@@ -89,16 +84,20 @@ def register_worker(dp, bot):
             return await call.answer("Нет доступа", show_alert=True)
 
         order_id = int(call.data.split("_")[1])
-        cur.execute(
-            "UPDATE orders SET status='IN_PROGRESS', worker_id=%s WHERE id=%s",
-            (call.from_user.id, order_id)
+        result = await db.db_execute(
+            "UPDATE orders SET status='IN_PROGRESS', worker_id=$1 WHERE id=$2 AND status='NEW'",
+            call.from_user.id, order_id
         )
-        cur.execute("SELECT user_id, amount, client_message_id FROM orders WHERE id=%s", (order_id,))
-        row = cur.fetchone()
+
+        if "UPDATE 0" in result:
+            return await call.answer("❌ Эту заявку уже забрали!", show_alert=True)
+        row = await db.db_fetchone("SELECT user_id, amount, client_message_id FROM orders WHERE id=$1", order_id)
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-        user_id, amount, client_msg_id = row
+        user_id = row["user_id"]
+        amount = float(row["amount"])
+        client_msg_id = row["client_message_id"]
 
         try:
             await bot.edit_message_text(
@@ -119,7 +118,7 @@ def register_worker(dp, bot):
             [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")]
         ])
         worker_msg = await call.message.answer("Заявка принята🔥", reply_markup=worker_keyboard)
-        cur.execute("UPDATE orders SET worker_message_id=%s WHERE id=%s", (worker_msg.message_id, order_id))
+        await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
         await call.answer("Взял в работу ❤️")
 
     @dp.callback_query(F.data.startswith("send_req_"))
@@ -127,18 +126,16 @@ def register_worker(dp, bot):
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
 
-        cur.execute("SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=%s", (uid,))
-        cards = cur.fetchall()
+        cards = await db.db_fetchall("SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=$1", uid)
 
         if not cards:
             return await call.answer("❌ У вас нет карт. Добавьте карту в /lk", show_alert=True)
 
         card_buttons = []
         for card in cards:
-            cid, number, expiry, bank = card
-            masked = f"{number[:6]}{'*'*6}{number[-4:]} · {bank}"
+            masked = f"{card['card_number'][:6]}{'*'*6}{card['card_number'][-4:]} · {card['bank']}"
             card_buttons.append([
-                InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"req_card_{order_id}_{cid}")
+                InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"req_card_{order_id}_{card['id']}")
             ])
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
@@ -151,22 +148,25 @@ def register_worker(dp, bot):
         order_id = int(parts[2])
         card_id = int(parts[3])
 
-        cur.execute(
-            "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=%s AND worker_id=%s",
-            (card_id, call.from_user.id)
+        row = await db.db_fetchone(
+            "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=$1 AND worker_id=$2",
+            card_id, call.from_user.id
         )
-        row = cur.fetchone()
         if not row:
             return await call.answer("❌ Карта не найдена", show_alert=True)
 
-        number, expiry, cvv, bank = row
+        number = row["card_number"]
+        expiry = row["expiry"]
+        cvv = row["cvv"]
+        bank = row["bank"]
 
-        cur.execute("SELECT user_id, amount, client_message_id FROM orders WHERE id=%s", (order_id,))
-        user_row = cur.fetchone()
-        if not user_row:
+        order_row = await db.db_fetchone("SELECT user_id, amount, client_message_id FROM orders WHERE id=$1", order_id)
+        if not order_row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-        user_id, amount, client_msg_id = user_row
+        user_id = order_row["user_id"]
+        amount = order_row["amount"]
+        client_msg_id = order_row["client_message_id"]
 
         try:
             await bot.edit_message_text(
@@ -202,12 +202,11 @@ def register_worker(dp, bot):
     @dp.callback_query(F.data.startswith("request_code_"))
     async def request_code(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
-        cur.execute("SELECT worker_id FROM orders WHERE id=%s", (order_id,))
-        row = cur.fetchone()
-        if not row or row[0] is None:
+        row = await db.db_fetchone("SELECT worker_id FROM orders WHERE id=$1", order_id)
+        if not row or row["worker_id"] is None:
             return await call.answer("❌ Нет исполнителя", show_alert=True)
 
-        worker_id = row[0]
+        worker_id = row["worker_id"]
         worker_keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")]
         ])
@@ -231,21 +230,18 @@ def register_worker(dp, bot):
         order_id = int(call.data.split("_")[2])
         worker_id = call.from_user.id
 
-        cur.execute(
-            "SELECT user_id, amount, status, client_message_id FROM orders WHERE id=%s AND worker_id=%s",
-            (order_id, worker_id)
+        row = await db.db_fetchone(
+            "SELECT user_id, amount, status, client_message_id, total_usdt FROM orders WHERE id=$1 AND worker_id=$2",
+            order_id, worker_id
         )
-        row = cur.fetchone()
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-        user_id, amount, status, client_msg_id = row
-        if status == "DONE":
-            return await call.answer("✅ Заявка уже завершена", show_alert=True)
-
-        total = round(amount * 1.2, 2)
-        rate = await crypto_get_rate()
-        total_usdt = round(total / rate, 4)
+        user_id = row["user_id"]
+        amount = float(row["amount"])
+        status = row["status"]
+        client_msg_id = row["client_message_id"]
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
 
         try:
             await bot.edit_message_text(
@@ -256,14 +252,14 @@ def register_worker(dp, bot):
                      f"💳 Услуга: Карта под оплату\n"
                      f"💰 Сумма: {amount:.2f} RUB\n\n"
                      f"📊 Статус: 🟡 ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ\n"
-                     f"💸 К списанию: {total_usdt:.4f} USDT ({total:.2f} RUB)\n\n"
+                     f"💸 К списанию: {total_usdt:.4f} USDT\n\n"
                      f"⏳ Пожалуйста, подтвердите оплату",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"client_paid_{order_id}_{total_usdt}")]
                 ])
             )
-        except:
-            pass
+        except Exception as e:
+            print(f"[worker_confirm] edit_message_text error: {e}")
 
         await call.answer("✅ Запрос отправлен клиенту", show_alert=True)
         await call.message.edit_reply_markup(reply_markup=None)
