@@ -188,8 +188,8 @@ def get_balance(user_id: int) -> float:
 
 def add_balance(user_id: int, amount: float):
     cur.execute("""
-        INSERT INTO balances (user_id, balance) VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?
+        INSERT INTO balances (user_id, balance) VALUES (%s, %s)
+        ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + %s
     """, (user_id, amount, amount))
 
 # ===== CARD HELPERS =====
@@ -362,7 +362,7 @@ async def lk(message: types.Message):
 
         await message.answer(text, reply_markup=keyboard)
 
-# ===== ЗАГЛУШКИ КНОПОК ЛК ===== 
+# ===== ЗАГЛУШКИ КНОПОК ЛК =====
 @dp.callback_query(
     (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_"))
     & ~F.data.startswith("client_paid_")
@@ -691,7 +691,7 @@ async def text_handler(message: types.Message):
 
         # Сохраняем инвойс в БД
         cur.execute(
-            "INSERT INTO invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
+            "INSERT INTO invoices (invoice_id, user_id, amount) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
             (invoice_id, uid, to_credit)
         )
     
@@ -735,14 +735,12 @@ async def text_handler(message: types.Message):
         bank = message.text.strip()
 
         cur.execute(
-            "INSERT INTO cards (worker_id, card_number, expiry, cvv, bank) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO cards (worker_id, card_number, expiry, cvv, bank) VALUES (%s, %s, %s, %s, %s)",
             (uid, card["number"], card["expiry"], card["cvv"], bank)
         )
-    
-        card_count = cur.execute(
-            "SELECT COUNT(*) FROM cards WHERE worker_id=?", (uid,)
-        )
-        cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*) FROM cards WHERE worker_id=%s", (uid,))
+        card_count = cur.fetchone()[0]
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="➕ Добавить ещё", callback_data="cards_add")],
@@ -775,10 +773,9 @@ async def text_handler(message: types.Message):
     total = round(rub * 1.2, 2)
 
     cur.execute(
-        "INSERT INTO orders (user_id, amount, status, worker_id) VALUES (?, ?, ?, ?)",
+        "INSERT INTO orders (user_id, amount, status, worker_id) VALUES (%s, %s, %s, %s) RETURNING id",
         (uid, rub, "NEW", None)
     )
-
     order_id = cur.fetchone()[0]
 
     text_order = (
@@ -944,10 +941,8 @@ async def req_card(call: types.CallbackQuery):
 
     number, expiry, cvv, bank = row
 
-    user_row = cur.execute(
-        "SELECT user_id FROM orders WHERE id=%s", (order_id,)
-    )
-    row = cur.fetchone()
+    cur.execute("SELECT user_id FROM orders WHERE id=%s", (order_id,))
+    user_row = cur.fetchone()
 
     if not user_row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -1106,8 +1101,8 @@ async def client_paid(call: types.CallbackQuery):
 
     # Зачисляем воркеру
     cur.execute("""
-        INSERT INTO balances (user_id, balance) VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?
+        INSERT INTO balances (user_id, balance) VALUES (%s, %s)
+        ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + %s
     """, (worker_id, total_usdt, total_usdt))
 
     # Закрываем заявку
