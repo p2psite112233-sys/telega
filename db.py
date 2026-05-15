@@ -3,11 +3,9 @@ import traceback
 import asyncpg
 from config import DATABASE_URL
 
-# Глобальный пул соединений
 pool = None
 
 async def init_db():
-    """Инициализирует пул соединений и создаёт таблицы."""
     global pool
     try:
         pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
@@ -22,7 +20,7 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT,
-                amount REAL,
+                amount NUMERIC(18,8),
                 status TEXT,
                 worker_id BIGINT,
                 client_message_id BIGINT,
@@ -37,15 +35,15 @@ async def init_db():
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS balances (
                 user_id BIGINT PRIMARY KEY,
-                balance REAL DEFAULT 0.0,
-                frozen REAL DEFAULT 0.0
+                balance NUMERIC(18,8) DEFAULT 0.0,
+                frozen NUMERIC(18,8) DEFAULT 0.0
             )
         """)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS invoices (
                 invoice_id BIGINT PRIMARY KEY,
                 user_id BIGINT,
-                amount REAL,
+                amount NUMERIC(18,8),
                 status TEXT DEFAULT 'active'
             )
         """)
@@ -60,7 +58,8 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        await conn.execute("ALTER TABLE balances ADD COLUMN IF NOT EXISTS frozen REAL DEFAULT 0.0")
+        # Миграции
+        await conn.execute("ALTER TABLE balances ADD COLUMN IF NOT EXISTS frozen NUMERIC(18,8) DEFAULT 0.0")
         await conn.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_message_id BIGINT")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS worker_message_id BIGINT")
@@ -87,63 +86,49 @@ async def add_balance(user_id: int, amount: float):
 
 async def freeze_balance(user_id: int, amount: float) -> bool:
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT balance FROM balances WHERE user_id=$1", user_id)
-        if not row or row["balance"] < amount:
-            return False
-        await conn.execute("""
-            UPDATE balances SET balance = balance - $1, frozen = frozen + $1
-            WHERE user_id=$2 AND balance >= $1
-        """, amount, user_id)
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT balance FROM balances WHERE user_id=$1 FOR UPDATE", user_id
+            )
+            if not row or float(row["balance"]) < amount:
+                return False
+            await conn.execute("""
+                UPDATE balances SET balance = balance - $1, frozen = frozen + $1
+                WHERE user_id=$2
+            """, amount, user_id)
     return True
 
 async def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
     async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE balances SET frozen = frozen - $1 WHERE user_id=$2 AND frozen >= $1",
-            amount, client_id
-        )
-        await conn.execute("""
-            INSERT INTO balances (user_id, balance) VALUES ($1, $2)
-            ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + $2
-        """, worker_id, amount)
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE balances SET frozen = frozen - $1 WHERE user_id=$2 AND frozen >= $1",
+                amount, client_id
+            )
+            await conn.execute("""
+                INSERT INTO balances (user_id, balance) VALUES ($1, $2)
+                ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + $2
+            """, worker_id, amount)
 
 async def unfreeze_back(user_id: int, amount: float):
     async with pool.acquire() as conn:
-        await conn.execute("""
-            UPDATE balances SET balance = balance + $1, frozen = frozen - $1
-            WHERE user_id=$2 AND frozen >= $1
-        """, amount, user_id)
+        async with conn.transaction():
+            await conn.execute("""
+                UPDATE balances SET balance = balance + $1, frozen = frozen - $1
+                WHERE user_id=$2 AND frozen >= $1
+            """, amount, user_id)
 
 async def db_fetchone(query: str, *args):
-    # Заменяем %s на $1, $2 итд для asyncpg
-    import re
-    idx = [0]
-    def repl(m):
-        idx[0] += 1
-        return f"${idx[0]}"
-    q = re.sub(r'%s', repl, query)
     async with pool.acquire() as conn:
-        return await conn.fetchrow(q, *args)
+        return await conn.fetchrow(query, *args)
 
 async def db_fetchall(query: str, *args):
-    import re
-    idx = [0]
-    def repl(m):
-        idx[0] += 1
-        return f"${idx[0]}"
-    q = re.sub(r'%s', repl, query)
     async with pool.acquire() as conn:
-        return await conn.fetch(q, *args)
+        return await conn.fetch(query, *args)
 
 async def db_execute(query: str, *args):
-    import re
-    idx = [0]
-    def repl(m):
-        idx[0] += 1
-        return f"${idx[0]}"
-    q = re.sub(r'%s', repl, query)
     async with pool.acquire() as conn:
-        return await conn.execute(q, *args)
+        return await conn.execute(query, *args)
 
 async def load_workers_from_db():
     async with pool.acquire() as conn:
