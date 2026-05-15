@@ -4,6 +4,7 @@ import re
 import sys
 import traceback
 import aiohttp
+from urllib.parse import quote_plus
 print("==> Starting bot...")
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -20,7 +21,9 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ===== DB =====
-DATABASE_URL = os.getenv("DATABASE_URL", "").replace("[YOUR-PASSWORD]", os.getenv("DB_PASSWORD", ""))
+_db_url = os.getenv("DATABASE_URL", "")
+_db_password = os.getenv("DB_PASSWORD", "")
+DATABASE_URL = _db_url.replace("[YOUR-PASSWORD]", quote_plus(_db_password))
 print(f"Connecting to DB: {DATABASE_URL[:40] if DATABASE_URL else 'NOT SET'}...")
 try:
     conn = psycopg2.connect(DATABASE_URL)
