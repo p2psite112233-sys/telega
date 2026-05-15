@@ -103,13 +103,16 @@ def add_balance(user_id: int, amount: float):
 
 def freeze_balance(user_id: int, amount: float) -> bool:
     """Замораживает сумму на балансе. Возвращает False если недостаточно средств."""
-    cur.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
-    row = cur.fetchone()
-    if not row or row[0] < amount:
-        return False
-    cur.execute("""
-        UPDATE balances SET balance = balance - %s, frozen = frozen + %s WHERE user_id=%s
-    """, (amount, amount, user_id))
+    with psycopg2.connect(DATABASE_URL) as c:
+        c.autocommit = True
+        with c.cursor() as cur2:
+            cur2.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
+            row = cur2.fetchone()
+            if not row or row[0] < amount:
+                return False
+            cur2.execute("""
+                UPDATE balances SET balance = balance - %s, frozen = frozen + %s WHERE user_id=%s
+            """, (amount, amount, user_id))
     return True
 
 def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
@@ -125,4 +128,3 @@ def unfreeze_back(user_id: int, amount: float):
     cur.execute("""
         UPDATE balances SET balance = balance + %s, frozen = frozen - %s WHERE user_id=%s
     """, (amount, amount, user_id))
- 
