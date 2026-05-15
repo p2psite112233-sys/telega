@@ -2,17 +2,8 @@ from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import db
-from db import unfreeze_to_worker
 from utils.crypto import crypto_get_rate
 from handlers.common import waiting, waiting_topup, waiting_card
-import psycopg2
-from config import DATABASE_URL
-
-def fresh_cur():
-    """Возвращает курсор свежего соединения."""
-    c = psycopg2.connect(DATABASE_URL)
-    c.autocommit = True
-    return c.cursor()
 
 
 CLIENT_MENU_TEXT = (
@@ -21,7 +12,7 @@ CLIENT_MENU_TEXT = (
     "пополнить номер телефона или оплатить готовый QR-код.\n"
     "Все этапы заявки фиксируются внутри сервиса.\n\n"
     "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
-    "🆕 Уникальная карта: дополнительно +10.00%\n"
+    "🆕 Уникальная карта: дополнительно +5%\n"
     "🔳 QR-оплата: скидка по комиссии -8.00%\n"
     "⚡️ Наши работники готовы обрабатывать заявки 24/7"
 )
@@ -53,34 +44,30 @@ def register_client(dp, bot):
         total_usdt = float(parts[3])
         uid = call.from_user.id
 
-        _cur = fresh_cur()
-        _cur.execute(
-            "SELECT worker_id, amount, status, client_message_id FROM orders WHERE id=%s AND user_id=%s",
-            (order_id, uid)
+        row = await db.db_fetchone(
+            "SELECT worker_id, amount, status, client_message_id FROM orders WHERE id=$1 AND user_id=$2",
+            order_id, uid
         )
-        row = _cur.fetchone()
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-        worker_id, amount, status, client_msg_id = row
+        worker_id = row["worker_id"]
+        amount = float(row["amount"])
+        status = row["status"]
+        client_msg_id = row["client_message_id"]
+
         if status == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
-        client_balance = db.get_balance(uid)
-        frozen = db.get_frozen(uid)
-        if frozen < total_usdt and client_balance < total_usdt:
-            return await call.answer(
-                f"❌ Недостаточно средств. Баланс: {client_balance:.4f} USDT",
-                show_alert=True
-            )
+        # Берём total_usdt из заявки (зафиксирован при создании)
+        row2 = await db.db_fetchone("SELECT total_usdt FROM orders WHERE id=$1", order_id)
+        total_usdt = float(row2["total_usdt"]) if row2 and row2["total_usdt"] else total_usdt
 
-        # Списываем с frozen и зачисляем воркеру
-        unfreeze_to_worker(uid, worker_id, total_usdt)
-        _cur = fresh_cur()
-        _cur.execute("UPDATE orders SET status='DONE' WHERE id=%s", (order_id,))
+        await db.unfreeze_to_worker(uid, worker_id, total_usdt)
+        await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1", order_id)
 
-        client_balance_new = db.get_balance(uid)
-        worker_balance = db.get_balance(worker_id)
+        client_balance_new = await db.get_balance(uid)
+        worker_balance = await db.get_balance(worker_id)
 
         try:
             await bot.edit_message_text(
@@ -162,15 +149,14 @@ def register_client(dp, bot):
 
         if call.data == "client_profile":
             from handlers.common import PROFILE_BANNER_FILE_ID
-            from db import db_fetchone, db_fetchall
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
-            balance = db.get_balance(uid)
-            frozen = db.get_frozen(uid)
-            row = db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
+            balance = await db.get_balance(uid)
+            frozen = await db.get_frozen(uid)
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
             closed = row[0] if row else 0
-            row = db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
             active = row[0] if row else 0
-            row = db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
+            row = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
             paid_count = row[0] if row else 0
             text = (
                 f"<b>👤 Личный профиль</b>\n"
@@ -201,22 +187,17 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "lk_cards":
-            _cur = fresh_cur()
-            _cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
-            cards = _cur.fetchall()
+            cards = await db.db_fetchall("SELECT id, card_number, expiry FROM cards WHERE worker_id=$1", uid)
             card_buttons = []
             for card in cards:
-                cid, number, expiry = card
-                masked = f"{number[:6]}{'*'*6}{number[-4:]} · {expiry}"
-                card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{cid}")])
+                masked = f"{card['card_number'][:6]}{'*'*6}{card['card_number'][-4:]} · {card['expiry']}"
+                card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{card['id']}")])
             card_buttons.append([InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")])
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
             await call.message.answer(
-                f"💳 Управление картами\n\n"
-                f"Выберите карту из списка или добавьте новую.\n\n"
-                f"💼 Сохранено карт: {len(cards)}",
+                f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}",
                 reply_markup=keyboard
             )
             return await call.answer()
@@ -224,21 +205,18 @@ def register_client(dp, bot):
         if call.data == "cards_add":
             waiting_card[uid] = True
             await call.message.answer(
-                "➕ Добавление карты\n\n"
-                "Отправьте данные карты в любом удобном виде.\n"
-                "Бот сам найдет номер, срок и CVV."
+                "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV."
             )
             return await call.answer()
 
         if call.data == "lk_home":
+            from handlers.common import get_role
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
-            balance = db.get_balance(uid)
-            _cur = fresh_cur()
-            _cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='DONE'", (uid,))
-            done_count = _cur.fetchone()[0]
-            _cur = fresh_cur()
-            _cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='IN_PROGRESS'", (uid,))
-            active_count = _cur.fetchone()[0]
+            balance = await db.get_balance(uid)
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
+            done_count = row[0] if row else 0
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
+            active_count = row[0] if row else 0
             text = (
                 f"🛠 Профиль работника\n"
                 f"Ваш профиль: {username} [{uid}]\n\n"
@@ -262,15 +240,12 @@ def register_client(dp, bot):
 
         if call.data.startswith("card_view_"):
             card_id = int(call.data.split("_")[2])
-            _cur = fresh_cur()
-            _cur.execute(
-                "SELECT card_number, expiry, cvv, bank, created_at FROM cards WHERE id=%s AND worker_id=%s",
-                (card_id, uid)
+            row = await db.db_fetchone(
+                "SELECT card_number, expiry, cvv, bank, created_at FROM cards WHERE id=$1 AND worker_id=$2",
+                card_id, uid
             )
-            row = _cur.fetchone()
             if not row:
                 return await call.answer("❌ Карта не найдена", show_alert=True)
-            number, expiry, cvv, bank, created_at = row
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🗑 Удалить карту", callback_data=f"card_delete_{card_id}")],
                 [InlineKeyboardButton(text="◀️ К списку карт", callback_data="lk_cards")],
@@ -278,28 +253,24 @@ def register_client(dp, bot):
             ])
             await call.message.answer(
                 f"💳 Карточка карты\n\n"
-                f"💳 Номер: {number}\n"
-                f"📅 Срок: {expiry}\n"
-                f"🔐 Код: {cvv}\n"
-                f"🏦 Банк: {bank}\n"
-                f"🕒 Добавлена: {created_at}",
+                f"💳 Номер: {row['card_number']}\n"
+                f"📅 Срок: {row['expiry']}\n"
+                f"🔐 Код: {row['cvv']}\n"
+                f"🏦 Банк: {row['bank']}\n"
+                f"🕒 Добавлена: {row['created_at']}",
                 reply_markup=keyboard
             )
             return await call.answer()
 
         if call.data.startswith("card_delete_"):
             card_id = int(call.data.split("_")[2])
-            _cur = fresh_cur()
-            _cur.execute("DELETE FROM cards WHERE id=%s AND worker_id=%s", (card_id, uid))
+            await db.db_execute("DELETE FROM cards WHERE id=$1 AND worker_id=$2", card_id, uid)
             await call.answer("✅ Карта удалена", show_alert=True)
-            _cur = fresh_cur()
-            _cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
-            cards = _cur.fetchall()
+            cards = await db.db_fetchall("SELECT id, card_number, expiry FROM cards WHERE worker_id=$1", uid)
             card_buttons = []
             for card in cards:
-                cid, number, expiry = card
-                masked = f"{number[:6]}{'*'*6}{number[-4:]} · {expiry}"
-                card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{cid}")])
+                masked = f"{card['card_number'][:6]}{'*'*6}{card['card_number'][-4:]} · {card['expiry']}"
+                card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{card['id']}")])
             card_buttons.append([InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")])
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
@@ -311,50 +282,40 @@ def register_client(dp, bot):
             return
 
         if call.data == "lk_active":
-            _cur = fresh_cur()
-            _cur.execute(
-                "SELECT id, amount, status FROM orders WHERE worker_id=%s AND status='IN_PROGRESS' ORDER BY id DESC",
-                (uid,)
+            orders = await db.db_fetchall(
+                "SELECT id, amount, status, total_usdt FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC",
+                uid
             )
-            orders = _cur.fetchall()
             if not orders:
                 await call.message.answer("🟢 Активных заявок нет")
                 return await call.answer()
             for order in orders:
-                oid, amount, status = order
-                total = round(amount * 1.2, 2)
-                rate = await crypto_get_rate()
-                total_usdt = round(total / rate, 4)
+                total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{oid}")],
-                    [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{oid}")]
+                    [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order['id']}")],
+                    [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order['id']}")]
                 ])
                 await call.message.answer(
-                    f"🟢 Заявка #{oid}\n\n"
-                    f"💰 Сумма: {amount:.2f} RUB\n"
-                    f"💎 К получению: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                    f"📊 Статус: {status}",
+                    f"🟢 Заявка #{order['id']}\n\n"
+                    f"💰 Сумма: {float(order['amount']):.2f} RUB\n"
+                    f"💎 К получению: {total_usdt:.4f} USDT\n"
+                    f"📊 Статус: {order['status']}",
                     reply_markup=keyboard
                 )
             return await call.answer()
 
         if call.data == "lk_history":
-            _cur = fresh_cur()
-            _cur.execute(
-                "SELECT id, amount FROM orders WHERE worker_id=%s AND status='DONE' ORDER BY id DESC LIMIT 20",
-                (uid,)
+            orders = await db.db_fetchall(
+                "SELECT id, amount, total_usdt FROM orders WHERE worker_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 20",
+                uid
             )
-            orders = _cur.fetchall()
             if not orders:
                 await call.message.answer("📚 История заявок пуста")
                 return await call.answer()
-            rate = await crypto_get_rate()
             text = "📚 История заявок (последние 20)\n\n"
             for order in orders:
-                oid, amount = order
-                total = round(amount * 1.2, 2)
-                total_usdt = round(total / rate, 4)
-                text += f"✅ #{oid} — {amount:.2f} RUB → {total_usdt:.4f} USDT\n"
+                total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
+                text += f"✅ #{order['id']} — {float(order['amount']):.2f} RUB → {total_usdt:.4f} USDT\n"
             await call.message.answer(text)
             return await call.answer()
 
