@@ -316,24 +316,35 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "client_history":
-            orders = await db.db_fetchall(
+            active_orders = await db.db_fetchall(
+                "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC",
+                uid
+            )
+            done_orders = await db.db_fetchall(
                 "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 20",
                 uid
             )
-            if not orders:
+            if not active_orders and not done_orders:
                 await call.message.answer("📚 История заявок пуста")
                 return await call.answer()
             buttons = []
-            for order in orders:
+            for order in active_orders:
+                total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
+                status_icon = "🟡" if order["status"] == "NEW" else "🟢"
+                buttons.append([InlineKeyboardButton(
+                    text=f"{status_icon} #{order['id']} — {float(order['amount']):.0f} RUB ({order['status']})",
+                    callback_data=f"history_order_{order['id']}"
+                )])
+            for order in done_orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 buttons.append([InlineKeyboardButton(
-                    text=f"✅ #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.4f} USDT",
+                    text=f"✅ #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.2f} USDT",
                     callback_data=f"history_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             await call.message.answer_photo(
-                photo="AgACAgIAAxkBAAIC22oG60BMhrR_cGdSTWlUOlceSuYSAAKaE2sbIOg5SIkS3QUK926nAQADAgADeQADOwQ",
+                photo=PROFILE_BANNER_FILE_ID,
                 caption=(
                     "<b>📚 История клиента</b>\n\n"
                     "<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>"
@@ -352,6 +363,13 @@ def register_client(dp, bot):
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
+            status = row["status"]
+            if status == "DONE":
+                status_text = "✅ DONE"
+            elif status == "IN_PROGRESS":
+                status_text = "🟢 IN PROGRESS"
+            else:
+                status_text = "🟡 NEW"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]
             ])
@@ -359,8 +377,8 @@ def register_client(dp, bot):
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
                 f"💳 Услуга: Карта под оплату\n"
                 f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
-                f"💸 Списано: {total_usdt:.4f} USDT\n"
-                f"📊 Статус: ✅ DONE",
+                f"💸 Списано: {total_usdt:.2f} USDT\n"
+                f"📊 Статус: {status_text}",
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
