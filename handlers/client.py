@@ -126,6 +126,7 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "client_profile":
+            from handlers.common import PROFILE_BANNER_FILE_ID
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = get_balance(uid)
             cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
@@ -135,12 +136,12 @@ def register_client(dp, bot):
             cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
             paid_count = cur.fetchone()[0]
             text = (
-                f"👤 Профиль клиента\n"
-                f"Ваш профиль: {username} [{uid}]\n\n"
-                f"💼 Финансы\n"
-                f"• Доступно на балансе: {balance:.4f} USDT\n"
-                f"• Заморожено в заявках: 0.00 USDT\n\n"
-                f"📊 Статистика\n"
+                f"<b>👤 Личный профиль</b>\n"
+                f"<blockquote>{username} [{uid}]</blockquote>\n\n"
+                f"<b>💼 Финансы</b>\n"
+                f"• Баланс: <b>{balance:.4f} USDT</b>\n"
+                f"• Заморожено: 0.00 USDT\n\n"
+                f"<b>📊 Статистика</b>\n"
                 f"• Закрыто заявок: {closed} шт\n"
                 f"• Активных заявок: {active} шт\n"
                 f"• Успешных пополнений: {paid_count} шт"
@@ -150,7 +151,12 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
             ])
-            await call.message.answer(text, reply_markup=keyboard)
+            await call.message.answer_photo(
+                photo=PROFILE_BANNER_FILE_ID,
+                caption=text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
             return await call.answer()
 
         if call.data == "client_back_menu":
