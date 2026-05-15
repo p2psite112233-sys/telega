@@ -3,12 +3,16 @@ logger = logging.getLogger(__name__)
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
 
 import db
 from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import WorkerRegStates
 
+# Определяем состояния для клиента (если они объявлены в другом месте, можно убрать)
+class ClientStates(StatesGroup):
+    waiting_for_amount = State()
 
 CLIENT_MENU_TEXT = (
     "🏠 Главное меню клиента\n\n"
@@ -41,6 +45,90 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
+    # --- НОВЫЙ ХЕНДЛЕР: ОБРАБОТКА ВВОДА СУММЫ И СОЗДАНИЕ ЗАЯВКИ С МИН. КОМИССИЕЙ 30 RUB ---
+    @dp.message(ClientStates.waiting_for_amount)
+    async def process_amount(message: types.Message, state: FSMContext):
+        try:
+            amount = float(message.text.strip())
+            if amount <= 0:
+                return await message.answer("❌ Сумма должна быть больше нуля. Введите сумму ещё раз:")
+        except ValueError:
+            return await message.answer("❌ Пожалуйста, введите корректное число:")
+
+        uid = message.from_user.id
+        data = await state.get_data()
+        
+        # Проверяем флаг уникальной карты (если есть)
+        is_unique = data.get("is_unique", False) 
+        
+        # Рассчитываем комиссию (20% обычная, 25% уникальная)
+        percent = 0.25 if is_unique else 0.20
+        dirty_profit_rub = amount * percent
+        
+        # Защита от микро-чеков: проверяем лимит в 30 RUB
+        is_min_commission = False
+        if dirty_profit_rub < 30.0:
+            dirty_profit_rub = 30.0
+            is_min_commission = True
+            
+        total_rub = round(amount + dirty_profit_rub, 2)  # Итоговая рублевая сумма для клиента
+
+        # Получаем актуальный курс крипты
+        try:
+            rate = await crypto_get_rate()
+        except Exception as e:
+            logger.error(f"Ошибка получения курса: {e}")
+            rate = 95.0  # Резервный курс
+
+        total_usdt = round(total_rub / rate, 4)    # Замораживаем у клиента
+        amount_usdt = round(amount / rate, 4)      # Чистое тело для воркера
+
+        # Проверка баланса пользователя
+        balance = await db.get_balance(uid)
+        if balance < total_usdt:
+            return await message.answer(
+                f"❌ Недостаточно средств на балансе.\n"
+                f"Вам необходимо: <b>{total_usdt:.4f} USDT</b>\n"
+                f"Ваш баланс: <b>{balance:.2f} USDT</b>\n\n"
+                f"Пополните баланс или введите меньшую сумму:"
+            )
+
+        # Замораживаем баланс клиента
+        await db.db_execute("UPDATE users SET balance = balance - $1, frozen = frozen + $1 WHERE id = $2", total_usdt, uid)
+        
+        # Создаем запись в базе данных
+        order_row = await db.db_fetchone(
+            "INSERT INTO orders (user_id, amount, total_usdt, amount_usdt, status) "
+            "VALUES ($1, $2, $3, $4, 'NEW') RETURNING id",
+            uid, amount, total_usdt, amount_usdt
+        )
+        order_id = order_row["id"]
+
+        min_commission_note = " ⚠️ (Включена мин. комиссия 30 RUB)" if is_min_commission else ""
+        unique_text = "✅ Уникальная карта" if is_unique else "❌ Обычная карта"
+
+        client_text = (
+            f"🎉 <b>Заявка принята в обработку</b>\n\n"
+            f"🆔 ID: #{order_id}\n"
+            f"💳 Услуга: Карта под оплату\n"
+            f"💰 Сумма: {amount:.2f} RUB\n"
+            f"💎 К оплате: {total_rub:.2f} RUB{min_commission_note}\n"
+            f"🃏 {unique_text}\n\n"
+            f"📊 Статус: 🟡 Новая\n"
+            f"👨‍💻 Исполнитель: назначается\n\n"
+            f"⏳ Ожидайте — скоро свяжемся с вами"
+        )
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
+        ])
+
+        msg = await message.answer(client_text, reply_markup=kb, parse_mode="HTML")
+        await db.db_execute("UPDATE orders SET client_message_id = $1 WHERE id = $2", msg.message_id, order_id)
+        
+        await state.clear()
+
+    # --- ТВОЙ КАРКАС КЛИЕНТСКИХ И ЛК ФУНКЦИЙ ---
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
@@ -62,7 +150,6 @@ def register_client(dp, bot):
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         worker_id = row["worker_id"]
 
-        # Возвращаем замороженные средства
         await db.unfreeze_back(uid, total_usdt)
         await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
 
@@ -76,7 +163,6 @@ def register_client(dp, bot):
 
         await call.answer("✅ Заявка отменена", show_alert=True)
 
-        # Уведомляем воркера если был назначен
         if worker_id:
             try:
                 await bot.send_message(
@@ -400,4 +486,3 @@ def register_client(dp, bot):
             return await call.answer()
 
         await call.answer("🚧 Раздел в разработке", show_alert=True)
- 
