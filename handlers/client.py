@@ -108,15 +108,33 @@ def register_client(dp, bot):
         uid = call.from_user.id
 
         if call.data == "client_card":
-            waiting[uid] = True
             await call.message.answer_photo(
                 photo="AgACAgIAAxkBAAIC92oG8dC8NL-jzOBotlCM2XGM-i86AALcE2sbIOg5SDV64bApD116AQADAgADeQADOwQ",
                 caption=(
                     "<b>💳 Карта под оплату</b>\n\n"
-                    "<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
-                    "После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
-                    "💸 Сумма заявки: в рублях\nПример: <b>500</b>"
+                    "<blockquote>Вам нужна уникальная карта?\n"
+                    "Уникальная карта — карта которую никто кроме вас не использовал.\n"
+                    "Дополнительная комиссия: <b>+5%</b></blockquote>"
                 ),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="✅ Да (+5%)", callback_data="card_unique_yes"),
+                        InlineKeyboardButton(text="❌ Нет", callback_data="card_unique_no")
+                    ]
+                ])
+            )
+            return await call.answer()
+
+        if call.data in ("card_unique_yes", "card_unique_no"):
+            unique = call.data == "card_unique_yes"
+            waiting[uid] = {"unique": unique}
+            extra = " (+5% за уникальность)" if unique else ""
+            await call.message.answer(
+                f"<b>💳 Карта под оплату</b>\n\n"
+                f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
+                f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
+                f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>",
                 parse_mode="HTML"
             )
             return await call.answer()
