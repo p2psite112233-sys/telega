@@ -400,3 +400,4 @@ def register_client(dp, bot):
             return await call.answer()
 
         await call.answer("🚧 Раздел в разработке", show_alert=True)
+ 
