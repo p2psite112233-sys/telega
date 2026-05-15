@@ -4,6 +4,7 @@ import re
 import sys
 import traceback
 import aiohttp
+print("==> Starting bot...")
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from aiohttp import web
