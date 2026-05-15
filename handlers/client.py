@@ -1,10 +1,18 @@
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from db import cur, unfreeze_to_worker
 import db
+from db import unfreeze_to_worker
 from utils.crypto import crypto_get_rate
 from handlers.common import waiting, waiting_topup, waiting_card
+import psycopg2
+from config import DATABASE_URL
+
+def fresh_cur():
+    """Возвращает курсор свежего соединения."""
+    c = psycopg2.connect(DATABASE_URL)
+    c.autocommit = True
+    return c.cursor()
 
 
 CLIENT_MENU_TEXT = (
@@ -45,11 +53,12 @@ def register_client(dp, bot):
         total_usdt = float(parts[3])
         uid = call.from_user.id
 
-        cur.execute(
+        _cur = fresh_cur()
+        _cur.execute(
             "SELECT worker_id, amount, status, client_message_id FROM orders WHERE id=%s AND user_id=%s",
             (order_id, uid)
         )
-        row = cur.fetchone()
+        row = _cur.fetchone()
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
@@ -67,7 +76,8 @@ def register_client(dp, bot):
 
         # Списываем с frozen и зачисляем воркеру
         unfreeze_to_worker(uid, worker_id, total_usdt)
-        cur.execute("UPDATE orders SET status='DONE' WHERE id=%s", (order_id,))
+        _cur = fresh_cur()
+        _cur.execute("UPDATE orders SET status='DONE' WHERE id=%s", (order_id,))
 
         client_balance_new = db.get_balance(uid)
         worker_balance = db.get_balance(worker_id)
@@ -191,8 +201,9 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "lk_cards":
-            cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
-            cards = cur.fetchall()
+            _cur = fresh_cur()
+            _cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
+            cards = _cur.fetchall()
             card_buttons = []
             for card in cards:
                 cid, number, expiry = card
@@ -222,10 +233,12 @@ def register_client(dp, bot):
         if call.data == "lk_home":
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = db.get_balance(uid)
-            cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='DONE'", (uid,))
-            done_count = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='IN_PROGRESS'", (uid,))
-            active_count = cur.fetchone()[0]
+            _cur = fresh_cur()
+            _cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='DONE'", (uid,))
+            done_count = _cur.fetchone()[0]
+            _cur = fresh_cur()
+            _cur.execute("SELECT COUNT(*) FROM orders WHERE worker_id=%s AND status='IN_PROGRESS'", (uid,))
+            active_count = _cur.fetchone()[0]
             text = (
                 f"🛠 Профиль работника\n"
                 f"Ваш профиль: {username} [{uid}]\n\n"
@@ -249,11 +262,12 @@ def register_client(dp, bot):
 
         if call.data.startswith("card_view_"):
             card_id = int(call.data.split("_")[2])
-            cur.execute(
+            _cur = fresh_cur()
+            _cur.execute(
                 "SELECT card_number, expiry, cvv, bank, created_at FROM cards WHERE id=%s AND worker_id=%s",
                 (card_id, uid)
             )
-            row = cur.fetchone()
+            row = _cur.fetchone()
             if not row:
                 return await call.answer("❌ Карта не найдена", show_alert=True)
             number, expiry, cvv, bank, created_at = row
@@ -275,10 +289,12 @@ def register_client(dp, bot):
 
         if call.data.startswith("card_delete_"):
             card_id = int(call.data.split("_")[2])
-            cur.execute("DELETE FROM cards WHERE id=%s AND worker_id=%s", (card_id, uid))
+            _cur = fresh_cur()
+            _cur.execute("DELETE FROM cards WHERE id=%s AND worker_id=%s", (card_id, uid))
             await call.answer("✅ Карта удалена", show_alert=True)
-            cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
-            cards = cur.fetchall()
+            _cur = fresh_cur()
+            _cur.execute("SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,))
+            cards = _cur.fetchall()
             card_buttons = []
             for card in cards:
                 cid, number, expiry = card
@@ -295,11 +311,12 @@ def register_client(dp, bot):
             return
 
         if call.data == "lk_active":
-            cur.execute(
+            _cur = fresh_cur()
+            _cur.execute(
                 "SELECT id, amount, status FROM orders WHERE worker_id=%s AND status='IN_PROGRESS' ORDER BY id DESC",
                 (uid,)
             )
-            orders = cur.fetchall()
+            orders = _cur.fetchall()
             if not orders:
                 await call.message.answer("🟢 Активных заявок нет")
                 return await call.answer()
@@ -322,11 +339,12 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "lk_history":
-            cur.execute(
+            _cur = fresh_cur()
+            _cur.execute(
                 "SELECT id, amount FROM orders WHERE worker_id=%s AND status='DONE' ORDER BY id DESC LIMIT 20",
                 (uid,)
             )
-            orders = cur.fetchall()
+            orders = _cur.fetchall()
             if not orders:
                 await call.message.answer("📚 История заявок пуста")
                 return await call.answer()
