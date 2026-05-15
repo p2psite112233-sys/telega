@@ -362,7 +362,7 @@ async def lk(message: types.Message):
 
         await message.answer(text, reply_markup=keyboard)
 
-# ===== ЗАГЛУШКИ КНОПОК ЛК =====
+# ===== ЗАГЛУШКИ КНОПОК ЛК ===== 
 @dp.callback_query(
     (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_"))
     & ~F.data.startswith("client_paid_")
