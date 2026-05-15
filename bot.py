@@ -1,7 +1,9 @@
 import asyncio
 import os
-import sqlite3
+import re
 import aiohttp
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
@@ -15,36 +17,38 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ===== DB =====
-conn = sqlite3.connect("bot.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+conn = psycopg2.connect(DATABASE_URL)
+conn.autocommit = True
 cur = conn.cursor()
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT,
     amount REAL,
     status TEXT,
-    worker_id INTEGER
+    worker_id BIGINT
 )
 """)
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS workers (
-    user_id INTEGER PRIMARY KEY
+    user_id BIGINT PRIMARY KEY
 )
 """)
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS balances (
-    user_id INTEGER PRIMARY KEY,
+    user_id BIGINT PRIMARY KEY,
     balance REAL DEFAULT 0.0
 )
 """)
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS invoices (
-    invoice_id INTEGER PRIMARY KEY,
-    user_id INTEGER,
+    invoice_id BIGINT PRIMARY KEY,
+    user_id BIGINT,
     amount REAL,
     status TEXT DEFAULT 'active'
 )
@@ -52,8 +56,8 @@ CREATE TABLE IF NOT EXISTS invoices (
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS cards (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    worker_id INTEGER,
+    id SERIAL PRIMARY KEY,
+    worker_id BIGINT,
     card_number TEXT,
     expiry TEXT,
     cvv TEXT,
@@ -61,7 +65,6 @@ CREATE TABLE IF NOT EXISTS cards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
-conn.commit()
 
 # ===== GLOBAL STATE =====
 pending_code = {}      # worker_id -> order_id (воркер вводит код)
@@ -101,7 +104,8 @@ def get_role(user_id: int):
 
 def load_workers():
     """Загружает воркеров из БД при старте бота."""
-    rows = cur.execute("SELECT user_id FROM workers").fetchall()
+    cur.execute("SELECT user_id FROM workers")
+    rows = cur.fetchall()
     for row in rows:
         uid = row[0]
         workers.add(uid)
@@ -165,7 +169,8 @@ async def crypto_check_invoice(invoice_id: int) -> str:
     return "unknown"
 
 def get_balance(user_id: int) -> float:
-    row = cur.execute("SELECT balance FROM balances WHERE user_id=?", (user_id,)).fetchone()
+    cur.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
+    row = cur.fetchone()
     return row[0] if row else 0.0
 
 def add_balance(user_id: int, amount: float):
@@ -173,7 +178,6 @@ def add_balance(user_id: int, amount: float):
         INSERT INTO balances (user_id, balance) VALUES (?, ?)
         ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?
     """, (user_id, amount, amount))
-    conn.commit()
 
 # ===== CARD HELPERS =====
 import re
@@ -273,9 +277,8 @@ async def set_worker(message: types.Message):
         workers.add(user_id)
         set_role(user_id, "worker")
         # Сохраняем в БД
-        cur.execute("INSERT OR IGNORE INTO workers (user_id) VALUES (?)", (user_id,))
-        conn.commit()
-        await message.answer(f"✅ Worker назначен: {user_id}")
+        cur.execute("INSERT INTO workers (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
+            await message.answer(f"✅ Worker назначен: {user_id}")
     except:
         await message.answer("Ошибка ID")
 
@@ -381,13 +384,16 @@ async def lk_buttons(call: types.CallbackQuery):
         # Статистика из БД
         closed = cur.execute(
             "SELECT COUNT(*) FROM orders WHERE user_id=? AND status='DONE'", (uid,)
-        ).fetchone()[0]
+        )
+        cur.fetchone()[0]
         active = cur.execute(
             "SELECT COUNT(*) FROM orders WHERE user_id=? AND status='IN_PROGRESS'", (uid,)
-        ).fetchone()[0]
+        )
+        cur.fetchone()[0]
         paid_count = cur.execute(
             "SELECT COUNT(*) FROM invoices WHERE user_id=? AND status='paid'", (uid,)
-        ).fetchone()[0]
+        )
+        cur.fetchone()[0]
 
         text = (
             f"👤 Профиль клиента\n"
@@ -449,8 +455,9 @@ async def lk_buttons(call: types.CallbackQuery):
     if call.data == "lk_cards":
         uid = call.from_user.id
         cards = cur.execute(
-            "SELECT id, card_number, expiry FROM cards WHERE worker_id=?", (uid,)
-        ).fetchall()
+            "SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,)
+        )
+        result = cur.fetchall()
 
         card_count = len(cards)
 
@@ -525,9 +532,10 @@ async def lk_buttons(call: types.CallbackQuery):
     if call.data.startswith("card_view_"):
         card_id = int(call.data.split("_")[2])
         row = cur.execute(
-            "SELECT card_number, expiry, cvv, bank, created_at FROM cards WHERE id=? AND worker_id=?",
+            "SELECT card_number, expiry, cvv, bank, created_at FROM cards WHERE id=%s AND worker_id=%s",
             (card_id, call.from_user.id)
-        ).fetchone()
+        )
+        row = cur.fetchone()
 
         if not row:
             return await call.answer("❌ Карта не найдена", show_alert=True)
@@ -556,18 +564,18 @@ async def lk_buttons(call: types.CallbackQuery):
     if call.data.startswith("card_delete_"):
         card_id = int(call.data.split("_")[2])
         cur.execute(
-            "DELETE FROM cards WHERE id=? AND worker_id=?",
+            "DELETE FROM cards WHERE id=%s AND worker_id=%s",
             (card_id, call.from_user.id)
         )
-        conn.commit()
-
+    
         await call.answer("✅ Карта удалена", show_alert=True)
 
         # Возвращаем к списку карт
         uid = call.from_user.id
         cards = cur.execute(
-            "SELECT id, card_number, expiry FROM cards WHERE worker_id=?", (uid,)
-        ).fetchall()
+            "SELECT id, card_number, expiry FROM cards WHERE worker_id=%s", (uid,)
+        )
+        result = cur.fetchall()
 
         card_buttons = []
         for card in cards:
@@ -617,9 +625,10 @@ async def text_handler(message: types.Message):
         code = message.text.strip()
 
         row = cur.execute(
-            "SELECT user_id FROM orders WHERE id=?",
+            "SELECT user_id FROM orders WHERE id=%s",
             (order_id,)
-        ).fetchone()
+        )
+        row = cur.fetchone()
 
         if not row or not row[0]:
             return await message.answer("❌ Ошибка: пользователь не найден")
@@ -679,11 +688,10 @@ async def text_handler(message: types.Message):
 
         # Сохраняем инвойс в БД
         cur.execute(
-            "INSERT OR IGNORE INTO invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
+            "INSERT INTO invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
             (invoice_id, uid, to_credit)
         )
-        conn.commit()
-
+    
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💰 Оплатить инвойс", url=pay_url)]
         ])
@@ -727,11 +735,11 @@ async def text_handler(message: types.Message):
             "INSERT INTO cards (worker_id, card_number, expiry, cvv, bank) VALUES (?, ?, ?, ?, ?)",
             (uid, card["number"], card["expiry"], card["cvv"], bank)
         )
-        conn.commit()
-
+    
         card_count = cur.execute(
             "SELECT COUNT(*) FROM cards WHERE worker_id=?", (uid,)
-        ).fetchone()[0]
+        )
+        cur.fetchone()[0]
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="➕ Добавить ещё", callback_data="cards_add")],
@@ -767,9 +775,8 @@ async def text_handler(message: types.Message):
         "INSERT INTO orders (user_id, amount, status, worker_id) VALUES (?, ?, ?, ?)",
         (uid, rub, "NEW", None)
     )
-    conn.commit()
 
-    order_id = cur.lastrowid
+    order_id = cur.fetchone()[0]
 
     text_order = (
         f"📥 Новая заявка #{order_id}\n\n"
@@ -811,15 +818,15 @@ async def check_payment_loop(user_id: int, invoice_id: int, to_credit: float):
         if status == "paid":
             # Проверяем что не зачислили уже
             row = cur.execute(
-                "SELECT status FROM invoices WHERE invoice_id=?", (invoice_id,)
-            ).fetchone()
+                "SELECT status FROM invoices WHERE invoice_id=%s", (invoice_id,)
+            )
+        row = cur.fetchone()
             if row and row[0] == "active":
                 add_balance(user_id, to_credit)
                 cur.execute(
-                    "UPDATE invoices SET status='paid' WHERE invoice_id=?", (invoice_id,)
+                    "UPDATE invoices SET status='paid' WHERE invoice_id=%s", (invoice_id,)
                 )
-                conn.commit()
-                balance = get_balance(user_id)
+                            balance = get_balance(user_id)
                 try:
                     await bot.send_message(
                         user_id,
@@ -833,10 +840,9 @@ async def check_payment_loop(user_id: int, invoice_id: int, to_credit: float):
 
         if status == "expired":
             cur.execute(
-                "UPDATE invoices SET status='expired' WHERE invoice_id=?", (invoice_id,)
+                "UPDATE invoices SET status='expired' WHERE invoice_id=%s", (invoice_id,)
             )
-            conn.commit()
-            try:
+                    try:
                 await bot.send_message(
                     user_id,
                     f"❌ Инвойс #{invoice_id} истёк. Создайте новый через /lk"
@@ -856,15 +862,15 @@ async def take(call: types.CallbackQuery):
     order_id = int(call.data.split("_")[1])
 
     cur.execute(
-        "UPDATE orders SET status='IN_PROGRESS', worker_id=? WHERE id=?",
+        "UPDATE orders SET status='IN_PROGRESS', worker_id=%s WHERE id=%s",
         (call.from_user.id, order_id)
     )
-    conn.commit()
 
     row = cur.execute(
-        "SELECT user_id FROM orders WHERE id=?",
+        "SELECT user_id FROM orders WHERE id=%s",
         (order_id,)
-    ).fetchone()
+    )
+        row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -896,8 +902,9 @@ async def send_req(call: types.CallbackQuery):
     uid = call.from_user.id
 
     cards = cur.execute(
-        "SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=?", (uid,)
-    ).fetchall()
+        "SELECT id, card_number, expiry, bank FROM cards WHERE worker_id=%s", (uid,)
+    )
+        result = cur.fetchall()
 
     if not cards:
         return await call.answer("❌ У вас нет карт. Добавьте карту в /lk", show_alert=True)
@@ -926,9 +933,10 @@ async def req_card(call: types.CallbackQuery):
     card_id = int(parts[3])
 
     row = cur.execute(
-        "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=? AND worker_id=?",
+        "SELECT card_number, expiry, cvv, bank FROM cards WHERE id=%s AND worker_id=%s",
         (card_id, call.from_user.id)
-    ).fetchone()
+    )
+        row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Карта не найдена", show_alert=True)
@@ -936,8 +944,9 @@ async def req_card(call: types.CallbackQuery):
     number, expiry, cvv, bank = row
 
     user_row = cur.execute(
-        "SELECT user_id FROM orders WHERE id=?", (order_id,)
-    ).fetchone()
+        "SELECT user_id FROM orders WHERE id=%s", (order_id,)
+    )
+        row = cur.fetchone()
 
     if not user_row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -954,8 +963,7 @@ async def req_card(call: types.CallbackQuery):
             f"🔐 CVV: {cvv}\n\n"
             f"📥 Заявка #{order_id}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
-                [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"client_paid_{order_id}")]
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
             ])
         )
     except:
@@ -976,9 +984,10 @@ async def request_code(call: types.CallbackQuery):
     order_id = int(call.data.split("_")[2])
 
     row = cur.execute(
-        "SELECT worker_id FROM orders WHERE id=?",
+        "SELECT worker_id FROM orders WHERE id=%s",
         (order_id,)
-    ).fetchone()
+    )
+        row = cur.fetchone()
 
     if not row or row[0] is None:
         return await call.answer("❌ Нет исполнителя", show_alert=True)
@@ -1025,9 +1034,10 @@ async def worker_confirm(call: types.CallbackQuery):
     worker_id = call.from_user.id
 
     row = cur.execute(
-        "SELECT user_id, amount, status FROM orders WHERE id=? AND worker_id=?",
+        "SELECT user_id, amount, status FROM orders WHERE id=%s AND worker_id=%s",
         (order_id, worker_id)
-    ).fetchone()
+    )
+        row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -1069,9 +1079,10 @@ async def client_paid(call: types.CallbackQuery):
     uid = call.from_user.id
 
     row = cur.execute(
-        "SELECT worker_id, amount, status FROM orders WHERE id=? AND user_id=?",
+        "SELECT worker_id, amount, status FROM orders WHERE id=%s AND user_id=%s",
         (order_id, uid)
-    ).fetchone()
+    )
+        row = cur.fetchone()
 
     if not row:
         return await call.answer("❌ Заявка не найдена", show_alert=True)
@@ -1090,7 +1101,7 @@ async def client_paid(call: types.CallbackQuery):
         )
 
     # Списываем с клиента
-    cur.execute("UPDATE balances SET balance = balance - ? WHERE user_id=?", (total_usdt, uid))
+    cur.execute("UPDATE balances SET balance = balance - %s WHERE user_id=%s", (total_usdt, uid))
 
     # Зачисляем воркеру
     cur.execute("""
@@ -1099,8 +1110,7 @@ async def client_paid(call: types.CallbackQuery):
     """, (worker_id, total_usdt, total_usdt))
 
     # Закрываем заявку
-    cur.execute("UPDATE orders SET status='DONE' WHERE id=?", (order_id,))
-    conn.commit()
+    cur.execute("UPDATE orders SET status='DONE' WHERE id=%s", (order_id,))
 
     client_balance_new = get_balance(uid)
     worker_balance = get_balance(worker_id)
