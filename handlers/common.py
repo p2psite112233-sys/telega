@@ -219,19 +219,20 @@ def register_common(dp, bot: Bot):
 
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
+        amount_usdt = round(rub / rate, 4)  # Чистая сумма без комиссии
 
         if not await db.freeze_balance(uid, total_usdt):
             balance = await db.get_balance(uid)
             return await message.answer(
                 f"❌ Недостаточно средств на балансе!\n\n"
                 f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                f"💰 Ваш баланс: {balance:.4f} USDT\n\n"
+                f"💰 Ваш баланс: {balance:.2f} USDT\n\n"
                 f"Пополните баланс через 🤑 Пополнить баланс"
             )
 
         row = await db.db_fetchone(
-            "INSERT INTO orders (user_id, amount, status, total_usdt) VALUES ($1, $2, 'NEW', $3) RETURNING id",
-            uid, rub, total_usdt
+            "INSERT INTO orders (user_id, amount, status, total_usdt, amount_usdt) VALUES ($1, $2, 'NEW', $3, $4) RETURNING id",
+            uid, rub, total_usdt, amount_usdt
         )
         order_id = row["id"]
 
@@ -360,4 +361,3 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
             except:
                 pass
             return
- 
