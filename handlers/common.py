@@ -107,19 +107,12 @@ def register_common(dp, bot):
         except:
             await message.answer("Ошибка ID")
 
-    @dp.message(F.text == "💳 Карта под оплату")
-    async def new_order_btn(message: types.Message):
-        waiting[message.from_user.id] = True
-        await message.answer(
-            "💳 Карта под оплату\n\n"
-            "Введите сумму в RUB, на которую нужна карта.\n\n"
-            "💸 Сумма заявки: в рублях\n"
-            "Пример: 500"
-        )
-
-    @dp.message(F.text & ~F.text.startswith("/") & (F.text != "💳 Карта под оплату"))
+    @dp.message(F.text & ~F.text.startswith("/"))
     async def text_handler(message: types.Message):
         uid = message.from_user.id
+        # DEBUG
+        if message.from_user.id == ADMIN_ID or True:
+            await message.answer(f"DEBUG: waiting={waiting.get(uid)} topup={waiting_topup.get(uid)} card={waiting_card.get(uid)} bank={uid in waiting_bank} code={uid in pending_code}")
 
         # 1. Воркер вводит код
         if uid in pending_code:
@@ -250,9 +243,7 @@ def register_common(dp, bot):
         except:
             return await message.answer("❌ Введите число, например 500")
 
-        order_data = waiting[uid]
-        waiting[uid] = False
-
+        order_data = waiting.pop(uid, True)
         unique = False
         if isinstance(order_data, dict):
             unique = order_data.get("unique", False)
