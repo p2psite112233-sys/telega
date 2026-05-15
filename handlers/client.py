@@ -109,10 +109,15 @@ def register_client(dp, bot):
 
         if call.data == "client_card":
             waiting[uid] = True
-            await call.message.answer(
-                "💳 Карта под оплату\n\n"
-                "Введите сумму в RUB, на которую нужна карта.\n\n"
-                "💸 Сумма заявки: в рублях\nПример: 500"
+            await call.message.answer_photo(
+                photo="AgACAgIAAxkBAAIC92oG8dC8NL-jzOBotlCM2XGM-i86AALcE2sbIOg5SDV64bApD116AQADAgADeQADOwQ",
+                caption=(
+                    "<b>💳 Карта под оплату</b>\n\n"
+                    "<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
+                    "После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
+                    "💸 Сумма заявки: в рублях\nПример: <b>500</b>"
+                ),
+                parse_mode="HTML"
             )
             return await call.answer()
 
