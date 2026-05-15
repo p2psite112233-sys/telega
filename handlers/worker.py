@@ -50,8 +50,8 @@ def register_worker(dp, bot):
                 f"<b>👤 Личный профиль</b>\n"
                 f"<blockquote>{username}</blockquote>\n\n"
                 f"<b>💼 Финансы</b>\n"
-                f"• Баланс: <b>{balance:.4f} USDT</b>\n"
-                f"• Заморожено: <b>{frozen:.4f} USDT</b>\n\n"
+                f"• Баланс: <b>{balance:.2f} USDT</b>\n"
+                f"• Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
                 f"<b>📊 Статистика</b>\n"
                 f"• Закрыто: {c_done['count']} шт\n"
                 f"• Активно: {c_active['count']} шт\n"
@@ -77,7 +77,7 @@ def register_worker(dp, bot):
             f"🛠 <b>Профиль работника</b>\n"
             f"Аккаунт: {username}\n\n"
             f"💼 <b>Финансы</b>\n"
-            f"• Доступно: <b>{balance:.4f} USDT</b>\n\n"
+            f"• Доступно: <b>{balance:.2f} USDT</b>\n\n"
             f"📊 <b>Статистика</b>\n"
             f"• Выполнено: {w_done['count']} шт\n"
             f"• В работе: {w_active['count']} шт"
@@ -224,7 +224,7 @@ def register_worker(dp, bot):
         await call.message.answer(
             f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
             f"{order_info(order_id, float(order['amount']), total_usdt)}\n\n"
-            f"⏳ Ожидаем код от клиента..."
+            f"⏳ Ожидаем запрос кода от клиента"
         )
 
     @dp.callback_query(F.data.startswith("request_code_"))
@@ -238,13 +238,31 @@ def register_worker(dp, bot):
             return await call.answer("❌ Нет доступа", show_alert=True)
 
         worker_id = row["worker_id"]
-        await bot.send_message(
+        order = await db.db_fetchone(
+            "SELECT amount, total_usdt FROM orders WHERE id=$1",
+            order_id
+        )
+        amount = float(order["amount"]) if order else 0.0
+        total_usdt = float(order["total_usdt"]) if order and order["total_usdt"] else 0.0
+
+        # Удаляем старое сообщение воркера и отправляем новое с инфо
+        try:
+            # Получаем worker_message_id чтобы удалить
+            w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
+            if w_row and w_row["worker_message_id"]:
+                await bot.delete_message(chat_id=worker_id, message_id=w_row["worker_message_id"])
+        except:
+            pass
+
+        new_worker_msg = await bot.send_message(
             worker_id,
-            f"🔑 Клиент запросил код\n\n📥 Заявка #{order_id}",
+            f"🔑 Клиент запросил код\n\n"
+            f"{order_info(order_id, amount, total_usdt)}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")]
             ])
         )
+        await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", new_worker_msg.message_id, order_id)
         await call.answer("Запрос отправлен 📩")
 
     @dp.callback_query(F.data.startswith("send_code_"))
@@ -275,6 +293,8 @@ def register_worker(dp, bot):
             return await message.answer("❌ Ошибка: заявка не найдена")
 
         user_id = row["user_id"]
+        amount = float(row["amount"])
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         client_msg_id = row["client_message_id"]
 
         # Удаляем сообщение "Введите код" и введённый код
@@ -288,15 +308,16 @@ def register_worker(dp, bot):
         except:
             pass
 
+        # Клиенту — инфо о заявке + код, без кнопки отмены
         new_msg = await bot.send_message(
             chat_id=user_id,
             text=f"🎉 Заявка #{order_id}\n\n"
+                 f"🆔 ID: #{order_id}\n"
+                 f"💳 Услуга: Карта под оплату\n"
+                 f"💰 Сумма: {amount:.2f} RUB\n\n"
                  f"📊 Статус: 🟢 В работе\n\n"
                  f"🔐 Код подтверждения: <code>{code}</code>",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
-            ])
+            parse_mode="HTML"
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
         try:
@@ -304,9 +325,10 @@ def register_worker(dp, bot):
         except Exception as e:
             logger.error(f"[process_code] delete error: {e}")
 
+        # Воркеру — инфо о заявке + кнопка подтверждения
         await message.answer(
-            f"✅ Код отправлен клиенту по заявке #{order_id}\n\n"
-            f"{order_info(order_id, float(row['amount']), float(row['total_usdt']) if row.get('total_usdt') else 0.0)}",
+            f"✅ Код отправлен клиенту\n\n"
+            f"{order_info(order_id, amount, total_usdt)}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order_id}")]
             ])
