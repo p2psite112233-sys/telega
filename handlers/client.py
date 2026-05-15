@@ -1,7 +1,7 @@
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from db import cur, get_balance
+from db import cur, get_balance, get_frozen, unfreeze_to_worker
 from utils.crypto import crypto_get_rate
 from handlers.common import waiting, waiting_topup, waiting_card
 
@@ -57,17 +57,15 @@ def register_client(dp, bot):
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
         client_balance = get_balance(uid)
-        if client_balance < total_usdt:
+        frozen = get_frozen(uid)
+        if frozen < total_usdt and client_balance < total_usdt:
             return await call.answer(
-                f"❌ Недостаточно средств. Ваш баланс: {client_balance:.4f} USDT",
+                f"❌ Недостаточно средств. Баланс: {client_balance:.4f} USDT",
                 show_alert=True
             )
 
-        cur.execute("UPDATE balances SET balance = balance - %s WHERE user_id=%s", (total_usdt, uid))
-        cur.execute("""
-            INSERT INTO balances (user_id, balance) VALUES (%s, %s)
-            ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + %s
-        """, (worker_id, total_usdt, total_usdt))
+        # Списываем с frozen и зачисляем воркеру
+        unfreeze_to_worker(uid, worker_id, total_usdt)
         cur.execute("UPDATE orders SET status='DONE' WHERE id=%s", (order_id,))
 
         client_balance_new = get_balance(uid)
@@ -130,12 +128,15 @@ def register_client(dp, bot):
             unique = call.data == "card_unique_yes"
             waiting[uid] = {"unique": unique}
             extra = " (+5% за уникальность)" if unique else ""
-            await call.message.answer(
-                f"<b>💳 Карта под оплату</b>\n\n"
-                f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
-                f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
-                f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>",
-                parse_mode="HTML"
+            await call.message.edit_caption(
+                caption=(
+                    f"<b>💳 Карта под оплату</b>\n\n"
+                    f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
+                    f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
+                    f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
+                ),
+                parse_mode="HTML",
+                reply_markup=None
             )
             return await call.answer()
 
