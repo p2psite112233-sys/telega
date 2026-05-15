@@ -151,6 +151,9 @@ def register_client(dp, bot):
     @dp.callback_query(
         (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_"))
         & ~F.data.startswith("client_paid_")
+        & ~F.data.startswith("client_card")
+        & ~F.data.startswith("client_topup")
+        & ~F.data.in_({"card_unique_yes", "card_unique_no"})
     )
     async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
         uid = call.from_user.id
