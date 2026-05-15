@@ -263,8 +263,18 @@ def register_common(dp, bot):
             rub_total = round(rub * 1.2, 2)  # 20% комиссия
 
         rate = await crypto_get_rate()
+        total_usdt = round(total / rate, 4)
         usdt = round(rub / rate, 4)
-        total = rub_total
+
+        # Проверяем и замораживаем баланс
+        from db import freeze_balance
+        if not freeze_balance(uid, total_usdt):
+            return await message.answer(
+                f"❌ Недостаточно средств на балансе!\n\n"
+                f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
+                f"💰 Ваш баланс: {get_balance(uid):.4f} USDT\n\n"
+                f"Пополните баланс через /lk → 🤑 Пополнить баланс"
+            )
 
         cur.execute(
             "INSERT INTO orders (user_id, amount, status, worker_id) VALUES (%s, %s, %s, %s) RETURNING id",
