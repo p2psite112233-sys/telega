@@ -38,6 +38,51 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
+    @dp.callback_query(F.data.startswith("cancel_order_"))
+    async def cancel_order(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[2])
+        uid = call.from_user.id
+
+        row = await db.db_fetchone(
+            "SELECT status, total_usdt, worker_id FROM orders WHERE id=$1 AND user_id=$2",
+            order_id, uid
+        )
+        if not row:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+
+        status = row["status"]
+        if status == "DONE":
+            return await call.answer("❌ Нельзя отменить завершённую заявку", show_alert=True)
+        if status not in ("NEW", "IN_PROGRESS"):
+            return await call.answer("❌ Заявку нельзя отменить", show_alert=True)
+
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
+        worker_id = row["worker_id"]
+
+        # Возвращаем замороженные средства
+        await db.unfreeze_back(uid, total_usdt)
+        await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
+
+        try:
+            await call.message.edit_text(
+                f"❌ Заявка #{order_id} отменена\n\n"
+                f"💰 Средства возвращены на баланс"
+            )
+        except Exception as e:
+            print(f"[cancel_order] edit error: {e}")
+
+        await call.answer("✅ Заявка отменена", show_alert=True)
+
+        # Уведомляем воркера если был назначен
+        if worker_id:
+            try:
+                await bot.send_message(
+                    worker_id,
+                    f"❌ Заявка #{order_id} была отменена клиентом"
+                )
+            except:
+                pass
+
     @dp.callback_query(F.data.startswith("client_paid_"))
     async def client_paid(call: types.CallbackQuery):
         parts = call.data.split("_")
@@ -321,7 +366,7 @@ def register_client(dp, bot):
                 uid
             )
             done_orders = await db.db_fetchall(
-                "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 20",
+                "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('DONE', 'CANCELLED') ORDER BY id DESC LIMIT 20",
                 uid
             )
             if not active_orders and not done_orders:
@@ -331,14 +376,16 @@ def register_client(dp, bot):
             for order in active_orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 status_icon = "🟡" if order["status"] == "NEW" else "🟢"
+                status_name = "Новая" if order["status"] == "NEW" else "В работе"
                 buttons.append([InlineKeyboardButton(
-                    text=f"{status_icon} #{order['id']} — {float(order['amount']):.0f} RUB ({order['status']})",
+                    text=f"{status_icon} #{order['id']} — {float(order['amount']):.0f} RUB ({status_name})",
                     callback_data=f"history_order_{order['id']}"
                 )])
             for order in done_orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
+                icon = "✅" if order["status"] == "DONE" else "❌"
                 buttons.append([InlineKeyboardButton(
-                    text=f"✅ #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.2f} USDT",
+                    text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.2f} USDT",
                     callback_data=f"history_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
@@ -365,11 +412,13 @@ def register_client(dp, bot):
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
             status = row["status"]
             if status == "DONE":
-                status_text = "✅ DONE"
+                status_text = "✅ Завершена"
             elif status == "IN_PROGRESS":
-                status_text = "🟢 IN PROGRESS"
+                status_text = "🟢 В работе"
+            elif status == "CANCELLED":
+                status_text = "❌ Отменена"
             else:
-                status_text = "🟡 NEW"
+                status_text = "🟡 Новая"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]
             ])
