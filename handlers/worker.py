@@ -10,11 +10,44 @@ def register_worker(dp, bot):
 
     @dp.message(F.text == "/lk")
     async def lk(message: types.Message):
-        from handlers.common import get_role
+        from handlers.common import get_role, PROFILE_BANNER_FILE_ID
         uid = message.from_user.id
         role = get_role(uid)
 
         if role not in ["worker", "admin"]:
+            # Клиент — показываем личный кабинет
+            from db import get_balance
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
+            balance = get_balance(uid)
+            cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
+            closed = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
+            active = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
+            paid_count = cur.fetchone()[0]
+            text = (
+                f"<b>👤 Личный профиль</b>\n"
+                f"<blockquote>{username} [{uid}]</blockquote>\n\n"
+                f"<b>💼 Финансы</b>\n"
+                f"• Баланс: <b>{balance:.4f} USDT</b>\n"
+                f"• Заморожено: 0.00 USDT\n\n"
+                f"<b>📊 Статистика</b>\n"
+                f"• Закрыто заявок: {closed} шт\n"
+                f"• Активных заявок: {active} шт\n"
+                f"• Успешных пополнений: {paid_count} шт"
+            )
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="client_ref")],
+                [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
+                [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+            ])
+            await message.answer_photo(
+                photo=PROFILE_BANNER_FILE_ID,
+                caption=text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
             return
 
         username = f"@{message.from_user.username}" if message.from_user.username else "нет username"
