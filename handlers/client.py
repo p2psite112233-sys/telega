@@ -1,10 +1,13 @@
+import logging
+logger = logging.getLogger(__name__)
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
 
 import db
 from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
-from handlers.common import waiting, waiting_topup, waiting_card
+from handlers.common import WorkerRegStates
 
 
 CLIENT_MENU_TEXT = (
@@ -131,7 +134,7 @@ def register_client(dp, bot):
                      f"💰 Ваш баланс: {client_balance_new:.4f} USDT"
             )
         except Exception as e:
-            print(f"[client_paid] edit error: {e}")
+            logger.error(f"[client_paid] edit error: {e}")
 
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
@@ -143,66 +146,19 @@ def register_client(dp, bot):
                 f"💰 Ваш баланс: {worker_balance:.4f} USDT"
             )
         except Exception as e:
-            print(f"[client_paid] send_message error: {e}")
+            logger.error(f"[client_paid] send_message error: {e}")
 
     @dp.callback_query(
         (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_"))
         & ~F.data.startswith("client_paid_")
     )
-    async def lk_buttons(call: types.CallbackQuery):
+    async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
         uid = call.from_user.id
 
         try:
             await call.message.delete()
         except:
             pass
-
-        if call.data == "client_card":
-            await call.message.answer_photo(
-                photo="AgACAgIAAxkBAAIC92oG8dC8NL-jzOBotlCM2XGM-i86AALcE2sbIOg5SDV64bApD116AQADAgADeQADOwQ",
-                caption=(
-                    "<b>💳 Карта под оплату</b>\n\n"
-                    "<blockquote>Вам нужна уникальная карта?\n"
-                    "Уникальная карта — карта которую никто кроме вас не использовал.\n"
-                    "Дополнительная комиссия: <b>+5%</b></blockquote>"
-                ),
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        InlineKeyboardButton(text="✅ Да (+5%)", callback_data="card_unique_yes"),
-                        InlineKeyboardButton(text="❌ Нет", callback_data="card_unique_no")
-                    ]
-                ])
-            )
-            return await call.answer()
-
-        if call.data in ("card_unique_yes", "card_unique_no"):
-            unique = call.data == "card_unique_yes"
-            waiting[uid] = {"unique": unique}
-            extra = " (+5% за уникальность)" if unique else ""
-            msg = await call.message.answer_photo(
-                photo=CARD_BANNER_FILE_ID,
-                caption=(
-                    f"<b>💳 Карта под оплату</b>\n\n"
-                    f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
-                    f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
-                    f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
-                ),
-                parse_mode="HTML"
-            )
-            # Сохраняем message_id чтобы удалить после ввода суммы
-            from handlers.common import pending_code_msg
-            pending_code_msg[f"sum_{uid}"] = msg.message_id
-            return await call.answer()
-
-        if call.data == "client_topup":
-            waiting_topup[uid] = True
-            await call.message.answer(
-                "💳 Пополнение баланса\n\n"
-                "Введите сумму пополнения в рублях.\n\n"
-                "💸 Сумма пополнения: в рублях"
-            )
-            return await call.answer()
 
         if call.data == "client_profile":
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
@@ -259,7 +215,7 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "cards_add":
-            waiting_card[uid] = True
+            await state.set_state(WorkerRegStates.waiting_for_card_data)
             await call.message.answer(
                 "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV."
             )
