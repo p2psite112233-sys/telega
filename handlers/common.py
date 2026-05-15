@@ -2,7 +2,7 @@ import asyncio
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
-from db import cur, get_balance, add_balance
+import db
 from config import ADMIN_ID
 from utils.crypto import crypto_get_rate, crypto_create_invoice
 from utils.cards import parse_card
@@ -22,6 +22,9 @@ menu = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+BANNER_FILE_ID = "AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ"
+PROFILE_BANNER_FILE_ID = "AgACAgIAAxkBAAIC22oG60BMhrR_cGdSTWlUOlceSuYSAAKaE2sbIOg5SIkS3QUK926nAQADAgADeQADOwQ"
+
 def set_role(user_id: int, role: str):
     users_role[user_id] = role
 
@@ -30,16 +33,12 @@ def get_role(user_id: int):
         return "admin"
     return users_role.get(user_id, "user")
 
-def load_workers():
-    cur.execute("SELECT user_id FROM workers")
-    rows = cur.fetchall()
-    for row in rows:
-        uid = row[0]
+async def load_workers():
+    rows = await db.load_workers_from_db()
+    for uid in rows:
         workers.add(uid)
         users_role[uid] = "worker"
-
-BANNER_FILE_ID = "AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ"
-PROFILE_BANNER_FILE_ID = "AgACAgIAAxkBAAIC22oG60BMhrR_cGdSTWlUOlceSuYSAAKaE2sbIOg5SIkS3QUK926nAQADAgADeQADOwQ"
+    print(f"Loaded {len(workers)} workers")
 
 def register_common(dp, bot):
 
@@ -63,7 +62,7 @@ def register_common(dp, bot):
                 "пополнить номер телефона или оплатить готовый QR-код.\n"
                 "Все этапы заявки фиксируются внутри сервиса.</blockquote>\n\n"
                 "💼 Комиссия сервиса: <b>20%</b> от суммы, но не меньше 30 RUB\n"
-                "🆕 Уникальная карта: дополнительно <b>+10%</b>\n"
+                "🆕 Уникальная карта: дополнительно <b>+5%</b>\n"
                 "🔳 QR-оплата: скидка по комиссии <b>-8%</b>\n"
                 "⚡️ Работаем <b>24/7</b>"
             )
@@ -102,7 +101,7 @@ def register_common(dp, bot):
             user_id = int(parts[1])
             workers.add(user_id)
             set_role(user_id, "worker")
-            cur.execute("INSERT INTO workers (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
+            await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
             await message.answer(f"✅ Worker назначен: {user_id}")
         except:
             await message.answer("Ошибка ID")
@@ -111,18 +110,23 @@ def register_common(dp, bot):
     async def text_handler(message: types.Message):
         uid = message.from_user.id
 
+        # Если нет активного состояния — игнорируем
+        if uid not in pending_code and not waiting_topup.get(uid) and not waiting_card.get(uid) and uid not in waiting_bank and not waiting.get(uid):
+            return
+
         # 1. Воркер вводит код
         if uid in pending_code:
             order_id = pending_code.pop(uid)
             code = message.text.strip()
 
-            cur.execute("SELECT user_id, amount, client_message_id FROM orders WHERE id=%s", (order_id,))
-            row = cur.fetchone()
+            row = await db.db_fetchone("SELECT user_id, amount, client_message_id FROM orders WHERE id=$1", order_id)
 
-            if not row or not row[0]:
+            if not row or not row["user_id"]:
                 return await message.answer("❌ Ошибка: пользователь не найден")
 
-            user_id, amount, client_msg_id = row
+            user_id = row["user_id"]
+            amount = float(row["amount"])
+            client_msg_id = row["client_message_id"]
 
             try:
                 await bot.edit_message_text(
@@ -174,9 +178,9 @@ def register_common(dp, bot):
             invoice_id = invoice["invoice_id"]
             pay_url = invoice["bot_invoice_url"]
 
-            cur.execute(
-                "INSERT INTO invoices (invoice_id, user_id, amount) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                (invoice_id, uid, to_credit)
+            await db.db_execute(
+                "INSERT INTO invoices (invoice_id, user_id, amount) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                invoice_id, uid, to_credit
             )
 
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -212,12 +216,12 @@ def register_common(dp, bot):
         if uid in waiting_bank:
             card = waiting_bank.pop(uid)
             bank = message.text.strip()
-            cur.execute(
-                "INSERT INTO cards (worker_id, card_number, expiry, cvv, bank) VALUES (%s, %s, %s, %s, %s)",
-                (uid, card["number"], card["expiry"], card["cvv"], bank)
+            await db.db_execute(
+                "INSERT INTO cards (worker_id, card_number, expiry, cvv, bank) VALUES ($1, $2, $3, $4, $5)",
+                uid, card["number"], card["expiry"], card["cvv"], bank
             )
-            cur.execute("SELECT COUNT(*) FROM cards WHERE worker_id=%s", (uid,))
-            card_count = cur.fetchone()[0]
+            row = await db.db_fetchone("SELECT COUNT(*) FROM cards WHERE worker_id=$1", uid)
+            card_count = row["count"] if row else 0
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="➕ Добавить ещё", callback_data="cards_add")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
@@ -246,30 +250,28 @@ def register_common(dp, bot):
             unique = order_data.get("unique", False)
 
         if unique:
-            rub_total = round(rub * 1.25, 2)
+            total = round(rub * 1.25, 2)
         else:
-            rub_total = round(rub * 1.2, 2)
+            total = round(rub * 1.2, 2)
 
-        total = rub_total
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
         usdt = round(rub / rate, 4)
 
-        # Проверяем и замораживаем баланс
-        from db import freeze_balance
-        if not freeze_balance(uid, total_usdt):
+        if not await db.freeze_balance(uid, total_usdt):
+            balance = await db.get_balance(uid)
             return await message.answer(
                 f"❌ Недостаточно средств на балансе!\n\n"
                 f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                f"💰 Ваш баланс: {get_balance(uid):.4f} USDT\n\n"
+                f"💰 Ваш баланс: {balance:.4f} USDT\n\n"
                 f"Пополните баланс через /lk → 🤑 Пополнить баланс"
             )
 
-        cur.execute(
-            "INSERT INTO orders (user_id, amount, status, worker_id) VALUES (%s, %s, %s, %s) RETURNING id",
-            (uid, rub, "NEW", None)
+        row = await db.db_fetchone(
+            "INSERT INTO orders (user_id, amount, status, worker_id, total_usdt) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+            uid, rub, "NEW", None, total_usdt
         )
-        order_id = cur.fetchone()[0]
+        order_id = row["id"]
 
         unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
 
@@ -285,7 +287,10 @@ def register_common(dp, bot):
             f"⏳ Ожидайте — скоро свяжемся с вами"
         )
 
-        cur.execute("UPDATE orders SET client_message_id=%s WHERE id=%s", (client_msg.message_id, order_id))
+        await db.db_execute(
+            "UPDATE orders SET client_message_id=$1 WHERE id=$2",
+            client_msg.message_id, order_id
+        )
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
@@ -313,12 +318,11 @@ async def check_payment_loop(bot, user_id: int, invoice_id: int, to_credit: floa
         status = await crypto_check_invoice(invoice_id)
 
         if status == "paid":
-            cur.execute("SELECT status FROM invoices WHERE invoice_id=%s", (invoice_id,))
-            row = cur.fetchone()
-            if row and row[0] == "active":
-                add_balance(user_id, to_credit)
-                cur.execute("UPDATE invoices SET status='paid' WHERE invoice_id=%s", (invoice_id,))
-                balance = get_balance(user_id)
+            row = await db.db_fetchone("SELECT status FROM invoices WHERE invoice_id=$1", invoice_id)
+            if row and row["status"] == "active":
+                await db.add_balance(user_id, to_credit)
+                await db.db_execute("UPDATE invoices SET status='paid' WHERE invoice_id=$1", invoice_id)
+                balance = await db.get_balance(user_id)
                 try:
                     await bot.send_message(
                         user_id,
@@ -331,7 +335,7 @@ async def check_payment_loop(bot, user_id: int, invoice_id: int, to_credit: floa
             return
 
         if status == "expired":
-            cur.execute("UPDATE invoices SET status='expired' WHERE invoice_id=%s", (invoice_id,))
+            await db.db_execute("UPDATE invoices SET status='expired' WHERE invoice_id=$1", invoice_id)
             try:
                 await bot.send_message(user_id, f"❌ Инвойс #{invoice_id} истёк. Создайте новый.")
             except:
