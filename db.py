@@ -25,6 +25,7 @@ async def init_db():
                 worker_id BIGINT,
                 client_message_id BIGINT,
                 worker_message_id BIGINT,
+                total_usdt NUMERIC(18,8) DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -45,7 +46,8 @@ async def init_db():
                 invoice_id BIGINT PRIMARY KEY,
                 user_id BIGINT,
                 amount NUMERIC(18,8),
-                status TEXT DEFAULT 'active'
+                status TEXT DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         await conn.execute("""
@@ -59,13 +61,16 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Миграции
+        
+        # --- Блок миграций для уже существующих таблиц ---
         await conn.execute("ALTER TABLE balances ADD COLUMN IF NOT EXISTS frozen NUMERIC(18,8) DEFAULT 0.0")
         await conn.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_message_id BIGINT")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS worker_message_id BIGINT")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_usdt NUMERIC(18,8) DEFAULT 0.0")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        await conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS bot_profit (
                 id SERIAL PRIMARY KEY,
@@ -82,7 +87,13 @@ async def init_db():
             )
         """)
 
-    print("DB tables OK")
+        # --- Создание индексов для молниеносной статистики ---
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_profit_created_at ON bot_profit(created_at)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_withdrawals_created_at ON withdrawals(created_at)")
+
+    print("DB tables and indexes OK")
 
 
 async def get_balance(user_id: int) -> float:
@@ -129,7 +140,6 @@ async def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
                 INSERT INTO balances (user_id, balance) VALUES ($1, $2)
                 ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + $2
             """, worker_id, worker_amount)
-            # Прибыль бота записываем в отдельную таблицу
             await conn.execute("""
                 INSERT INTO bot_profit (amount) VALUES ($1)
             """, bot_amount)
