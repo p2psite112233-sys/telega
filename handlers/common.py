@@ -246,6 +246,18 @@ def register_common(dp, bot):
         if isinstance(order_data, dict):
             unique = order_data.get("unique", False)
 
+        # Удаляем сообщение с просьбой ввести сумму
+        sum_msg_id = pending_code_msg.pop(f"sum_{uid}", None)
+        if sum_msg_id:
+            try:
+                await bot.delete_message(uid, sum_msg_id)
+            except:
+                pass
+        try:
+            await message.delete()
+        except:
+            pass
+
         if unique:
             total = round(rub * 1.25, 2)
         else:
