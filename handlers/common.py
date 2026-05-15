@@ -250,9 +250,21 @@ def register_common(dp, bot):
         except:
             return await message.answer("❌ Введите число, например 500")
 
+        order_data = waiting[uid]
         waiting[uid] = False
-        usdt = round(rub / 63.7, 2)
-        total = round(rub * 1.2, 2)
+
+        unique = False
+        if isinstance(order_data, dict):
+            unique = order_data.get("unique", False)
+
+        if unique:
+            rub_total = round(rub * 1.25, 2)  # 20% комиссия + 5% уникальность
+        else:
+            rub_total = round(rub * 1.2, 2)  # 20% комиссия
+
+        rate = await crypto_get_rate()
+        usdt = round(rub / rate, 4)
+        total = rub_total
 
         cur.execute(
             "INSERT INTO orders (user_id, amount, status, worker_id) VALUES (%s, %s, %s, %s) RETURNING id",
@@ -260,11 +272,15 @@ def register_common(dp, bot):
         )
         order_id = cur.fetchone()[0]
 
+        unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
+
         client_msg = await message.answer(
             f"🎉 Заявка принята в обработку\n\n"
             f"🆔 ID: #{order_id}\n"
             f"💳 Услуга: Карта под оплату\n"
-            f"💰 Сумма: {rub:.2f} RUB\n\n"
+            f"💰 Сумма: {rub:.2f} RUB\n"
+            f"💎 К оплате: {total:.2f} RUB\n"
+            f"🃏 {unique_text}\n\n"
             f"📊 Статус: 🟡 NEW\n"
             f"👨‍💻 Исполнитель: назначается\n\n"
             f"⏳ Ожидайте — скоро свяжемся с вами"
@@ -275,9 +291,10 @@ def register_common(dp, bot):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
         ])
+        unique_label = "⭐️ УНИКАЛЬНАЯ" if unique else "обычная"
         text_order = (
             f"📥 Новая заявка #{order_id}\n\n"
-            f"💳 Метод: Карта под оплату\n"
+            f"💳 Метод: Карта под оплату ({unique_label})\n"
             f"💰 Сумма: {rub:.2f} RUB\n"
             f"💎 Итог: {total:.2f} RUB\n"
             f"🔐 Резерв: {usdt} USDT\n\n"
