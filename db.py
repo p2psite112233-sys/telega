@@ -75,7 +75,9 @@ def get_balance(user_id: int) -> float:
 def get_frozen(user_id: int) -> float:
     cur.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
     row = cur.fetchone()
-    return row[0] if row else 0.0
+    if not row or row[0] is None:
+        return 0.0
+    return float(row[0])
 
 def add_balance(user_id: int, amount: float):
     cur.execute("""
