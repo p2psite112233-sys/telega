@@ -68,15 +68,15 @@ cur.execute("UPDATE balances SET frozen = 0.0 WHERE frozen IS NULL")
 
 # ===== ХЕЛПЕРЫ =====
 def get_balance(user_id: int) -> float:
-    conn.commit()
-    cur.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
-    row = cur.fetchone()
+    with conn.cursor() as c:
+        c.execute("SELECT balance FROM balances WHERE user_id=%s", (user_id,))
+        row = c.fetchone()
     return row[0] if row else 0.0
 
 def get_frozen(user_id: int) -> float:
-    conn.commit()
-    cur.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
-    row = cur.fetchone()
+    with conn.cursor() as c:
+        c.execute("SELECT frozen FROM balances WHERE user_id=%s", (user_id,))
+        row = c.fetchone()
     if not row or row[0] is None:
         return 0.0
     return float(row[0])
