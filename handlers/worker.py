@@ -2,15 +2,15 @@ from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 import db
+from config import PROFILE_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
-from handlers.common import pending_code, pending_code_msg, waiting_card, workers
+from handlers.common import pending_code, pending_code_msg, waiting_card, workers, get_role
 
 
 def register_worker(dp, bot):
 
     @dp.message(F.text == "/lk")
     async def lk(message: types.Message):
-        from handlers.common import get_role, PROFILE_BANNER_FILE_ID
         uid = message.from_user.id
         role = get_role(uid)
 
@@ -78,7 +78,6 @@ def register_worker(dp, bot):
 
     @dp.callback_query(F.data.startswith("take_"))
     async def take(call: types.CallbackQuery):
-        from handlers.common import get_role
         role = get_role(call.from_user.id)
         if role not in ["worker", "admin"]:
             return await call.answer("Нет доступа", show_alert=True)
