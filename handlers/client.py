@@ -151,15 +151,16 @@ def register_client(dp, bot):
 
         if call.data == "client_profile":
             from handlers.common import PROFILE_BANNER_FILE_ID
+            from db import db_fetchone, db_fetchall
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = get_balance(uid)
             frozen = get_frozen(uid)
-            cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
-            closed = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
-            active = cur.fetchone()[0]
-            cur.execute("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
-            paid_count = cur.fetchone()[0]
+            row = db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='DONE'", (uid,))
+            closed = row[0] if row else 0
+            row = db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=%s AND status='IN_PROGRESS'", (uid,))
+            active = row[0] if row else 0
+            row = db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=%s AND status='paid'", (uid,))
+            paid_count = row[0] if row else 0
             text = (
                 f"<b>👤 Личный профиль</b>\n"
                 f"<blockquote>{username} [{uid}]</blockquote>\n\n"
