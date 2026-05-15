@@ -168,3 +168,4 @@ async def load_workers_from_db():
     async with pool.acquire() as conn:
         rows = await conn.fetch("SELECT user_id FROM workers")
     return [row["user_id"] for row in rows]
+ 
