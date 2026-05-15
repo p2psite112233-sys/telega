@@ -24,7 +24,8 @@ async def init_db():
                 status TEXT,
                 worker_id BIGINT,
                 client_message_id BIGINT,
-                worker_message_id BIGINT
+                worker_message_id BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         await conn.execute("""
@@ -64,6 +65,22 @@ async def init_db():
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_message_id BIGINT")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS worker_message_id BIGINT")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS total_usdt NUMERIC(18,8) DEFAULT 0.0")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS bot_profit (
+                id SERIAL PRIMARY KEY,
+                amount NUMERIC(18,8),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS withdrawals (
+                id SERIAL PRIMARY KEY,
+                worker_id BIGINT,
+                amount NUMERIC(18,8),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
     print("DB tables OK")
 
@@ -100,6 +117,8 @@ async def freeze_balance(user_id: int, amount: float) -> bool:
     return True
 
 async def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
+    worker_amount = round(amount * 0.8, 8)
+    bot_amount = round(amount * 0.2, 8)
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
@@ -109,7 +128,11 @@ async def unfreeze_to_worker(client_id: int, worker_id: int, amount: float):
             await conn.execute("""
                 INSERT INTO balances (user_id, balance) VALUES ($1, $2)
                 ON CONFLICT (user_id) DO UPDATE SET balance = balances.balance + $2
-            """, worker_id, amount)
+            """, worker_id, worker_amount)
+            # Прибыль бота записываем в отдельную таблицу
+            await conn.execute("""
+                INSERT INTO bot_profit (amount) VALUES ($1)
+            """, bot_amount)
 
 async def unfreeze_back(user_id: int, amount: float):
     async with pool.acquire() as conn:
@@ -135,4 +158,3 @@ async def load_workers_from_db():
     async with pool.acquire() as conn:
         rows = await conn.fetch("SELECT user_id FROM workers")
     return [row["user_id"] for row in rows]
- 
