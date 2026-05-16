@@ -82,7 +82,7 @@ def register_worker(dp, bot):
              InlineKeyboardButton(text="📚 История", callback_data="lk_history")],
             [InlineKeyboardButton(text="💳 Карты", callback_data="lk_cards")]
         ])
-        await message.answer(text, reply_markup=kb, parse_mode="HTML")
+        await message.answer_photo(photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
 
     @dp.callback_query(F.data.startswith("take_"))
     async def take(call: types.CallbackQuery):
