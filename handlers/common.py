@@ -70,7 +70,21 @@ def register_common(dp, bot: Bot):
         )
 
         if role in ["worker", "admin"]:
-            return await message.answer(f"🛠 Режим: {role.upper()}", reply_markup=menu)
+            worker_text = (
+                "<b>🏠 Главное меню работника</b>\n\n"
+                "<blockquote>Здесь вы получаете заявки на выдачу карты, переводы на карту/СБП, "
+                "оплату QR-кодов или пополнение номеров.\n"
+                "Бот выступает гарантом и фиксирует все действия.</blockquote>\n\n"
+                "💸 Ваша доля от комиссии: <b>80.00%</b>\n"
+                "🧾 Доля сервиса от комиссии: <b>20.00%</b>\n"
+                "✅ Вы сами выбираете, какую заявку взять в работу"
+            )
+            worker_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📥 Доступные заявки", callback_data="lk_active")],
+                [InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="lk_home")],
+                [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
+            ])
+            return await message.answer_photo(photo=BANNER_FILE_ID, caption=worker_text, reply_markup=worker_kb, parse_mode="HTML")
 
         text = (
             "<b>🏠 Send$Paid — Главное меню</b>\n\n"
