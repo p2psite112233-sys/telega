@@ -4,172 +4,137 @@ from datetime import datetime, timedelta
 from aiogram import types, F, Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
 
 import db
 from config import ADMIN_ID
+from utils.shared import set_role
 
 logger = logging.getLogger(__name__)
 
+class AdminStates(StatesGroup):
+    waiting_for_broadcast_text = State()
+    waiting_for_worker_id = State()
+
 def register_admin(dp, bot: Bot):
 
-    # --- ГЛАВНОЕ МЕНЮ АДМИНКИ ---
-    @dp.message(F.text == "/admin")
-    async def admin_main_menu(message: types.Message, state: FSMContext):
-        if message.from_user.id != ADMIN_ID:
-            return
-        
-        # Сбрасываем любой зависший ввод (стейт)
-        await state.clear()
-        
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats_menu")],
-            [InlineKeyboardButton(text="👥 Воркеры", callback_data="adm_workers_menu")],
-            [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
-        ])
-        
-        await message.answer(
-            "🛠 <b>Панель администратора</b>\n\n"
-            "Здесь вы можете просматривать отчеты и управлять системой.",
-            reply_markup=kb,
-            parse_mode="HTML"
-        )
-
-    # --- МЕНЮ ВЫБОРА ПЕРИОДА ---
-    @dp.callback_query(F.data == "adm_stats_menu")
-    async def stats_menu(call: types.CallbackQuery, state: FSMContext):
-        await state.clear()
+    # --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ (Исправлено через Try/Except) ---
+    async def send_admin_menu(message: types.Message):
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="📅 День", callback_data="st_day"),
-                InlineKeyboardButton(text="📆 Неделя", callback_data="st_week"),
-                InlineKeyboardButton(text="🗓 Месяц", callback_data="st_month")
+                InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats_menu"),
+                InlineKeyboardButton(text="💰 Касса", callback_data="adm_finance_menu")
             ],
-            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
+            [
+                InlineKeyboardButton(text="👥 Воркеры", callback_data="adm_workers_manage"),
+                InlineKeyboardButton(text="📢 Рассылка", callback_data="adm_broadcast")
+            ],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
         ])
-        await call.message.edit_text("📈 <b>Выберите период для отчета:</b>", reply_markup=kb, parse_mode="HTML")
-        await call.answer()
-
-    # --- ОБРАБОТКА СТАТИСТИКИ ---
-    @dp.callback_query(F.data.startswith("st_"))
-    async def process_stats(call: types.CallbackQuery):
-        period = call.data.split("_")[1]
-        now = datetime.now()
+        text = "🛠 <b>Панель управления проектом</b>"
         
-        if period == "day":
-            since = now - timedelta(days=1)
-            label = "день"
-        elif period == "week":
-            since = now - timedelta(weeks=1)
-            label = "неделю"
-        else:
-            since = now - timedelta(days=30)
-            label = "месяц"
-
         try:
-            # Убираем часовые пояса для совместимости с БД
-            since_naive = since.replace(tzinfo=None)
+            # Пытаемся отредактировать (если это вызов из callback)
+            await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        except Exception:
+            # Если это новое сообщение (команда /admin) или текст тот же
+            await message.answer(text, reply_markup=kb, parse_mode="HTML")
 
-            # 1. Заявки и Оборот (Берем из orders)
-            # В твоем коде профиля используется статус DONE
-            orders_rows = await db.db_fetchall("""
-                SELECT status, total_usdt, amount FROM orders WHERE created_at >= $1
-            """, since_naive)
+    @dp.message(F.text == "/admin")
+    async def admin_start(message: types.Message, state: FSMContext):
+        if message.from_user.id != ADMIN_ID: return
+        await state.clear()
+        await send_admin_menu(message)
 
-            stats = {'NEW': 0, 'IN_PROGRESS': 0, 'DONE': 0, 'CANCELLED': 0}
-            turnover_usdt = 0.0
-            turnover_rub = 0.0
-
-            for r in orders_rows:
-                # Приводим статус к верхнему регистру для сравнения
-                st = str(r['status']).upper() if r['status'] else "NEW"
-                
-                if st in ['DONE', 'SUCCESS', 'COMPLETED']:
-                    stats['DONE'] += 1
-                    turnover_usdt += float(r['total_usdt'] or 0)
-                    turnover_rub += float(r['amount'] or 0)
-                elif st in ['CANCELLED', 'REJECTED']:
-                    stats['CANCELLED'] += 1
-                elif st in ['IN_PROGRESS', 'WAITING']:
-                    stats['IN_PROGRESS'] += 1
-                else:
-                    stats['NEW'] += 1
-
-            # 2. Чистая прибыль (Из таблицы bot_profit, куда пишет db.py)
-            profit_row = await db.db_fetchone("""
-                SELECT SUM(amount) as total FROM bot_profit WHERE created_at >= $1
-            """, since_naive)
-            net_profit = float(profit_row['total'] or 0) if profit_row and profit_row['total'] else 0.0
-
-            # 3. Пополнения (Из таблицы invoices, статус 'paid')
-            topup_row = await db.db_fetchone("""
-                SELECT SUM(amount) as total FROM invoices 
-                WHERE status='paid' AND created_at >= $1
-            """, since_naive)
-            total_topup = float(topup_row['total'] or 0) if topup_row and topup_row['total'] else 0.0
-
-            # 4. Выведено воркерами (Из таблицы withdrawals)
-            withdraw_row = await db.db_fetchone("""
-                SELECT SUM(amount) as total FROM withdrawals WHERE created_at >= $1
-            """, since_naive)
-            worker_payout = float(withdraw_row['total'] or 0) if withdraw_row and withdraw_row['total'] else 0.0
-
-            # 5. Пользователи и Топ
-            workers_count = await db.db_fetchone("SELECT COUNT(*) as count FROM workers")
-            top_worker = await db.db_fetchone("""
-                SELECT worker_id, SUM(total_usdt) as sales 
-                FROM orders 
-                WHERE (status='DONE' OR status='SUCCESS' OR status='COMPLETED') 
-                AND created_at >= $1 
-                GROUP BY worker_id ORDER BY sales DESC LIMIT 1
-            """, since_naive)
-
-            # Формируем итоговый текст
-            text = (
-                f"📊 <b>Статистика за {label}</b>\n\n"
-                f"📋 <b>Заявки</b>\n"
-                f"• Всего: {len(orders_rows)}\n"
-                f"• 🟡 Новые: {stats['NEW']}\n"
-                f"• 🟢 В работе: {stats['IN_PROGRESS']}\n"
-                f"• ✅ Завершённые: {stats['DONE']}\n"
-                f"• ❌ Отменённые: {stats['CANCELLED']}\n\n"
-                f"💰 <b>Финансы</b>\n"
-                f"• Оборот: <code>{turnover_usdt:.4f}</code> USDT (<code>{turnover_rub:.0f}</code> RUB)\n"
-                f"• Чистая прибыль: <b>{net_profit:.4f}</b> USDT\n"
-                f"• Пополнено: {total_topup:.4f} USDT\n"
-                f"• Выведено воркерами: {worker_payout:.4f} USDT\n\n"
-                f"👥 <b>Пользователи</b>\n"
-                f"• Всего воркеров: {workers_count['count']}\n\n"
-                f"🏆 <b>Топ воркеров</b>\n"
-            )
-
-            if top_worker and top_worker['worker_id']:
-                text += f"  1. ID {top_worker['worker_id']} — {float(top_worker['sales']):.4f} USDT"
-            else:
-                text += "  Данных пока нет"
-
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_stats_menu")]
-            ])
-
-            await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-            
-        except Exception as e:
-            logger.error(f"Ошибка статистики: {e}")
-            traceback.print_exc()
-            await call.message.answer(f"⚠️ Ошибка формирования отчета: <code>{e}</code>", parse_mode="HTML")
-        
-        await call.answer()
-
-    # --- ВСПОМОГАТЕЛЬНЫЕ КНОПКИ ---
     @dp.callback_query(F.data == "adm_back_to_main")
     async def back_to_main(call: types.CallbackQuery, state: FSMContext):
-        await admin_main_menu(call.message, state)
+        await state.clear()
+        await send_admin_menu(call.message)
         await call.answer()
 
+    # --- ОБРАБОТКА ЗАЯВОК (Исправлен Split) ---
+    @dp.callback_query(F.data.startswith("app_"))
+    async def process_app(call: types.CallbackQuery):
+        # Data: app_accept_12345 или app_decline_12345
+        parts = call.data.split("_")
+        action = parts[1]  # accept / decline
+        target_id = int(parts[2])
+        
+        if action == "accept":
+            await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", target_id)
+            await db.db_execute("UPDATE worker_applications SET status='accepted' WHERE user_id=$1", target_id)
+            set_role(target_id, "worker")
+            try:
+                await bot.send_message(target_id, "🎉 <b>Ваша заявка одобрена!</b>\nТеперь вы можете принимать заказы.", parse_mode="HTML")
+            except: pass
+            await call.message.edit_text(f"✅ Юзер <code>{target_id}</code> принят в воркеры.", parse_mode="HTML")
+        else:
+            await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", target_id)
+            await call.message.edit_text(f"❌ Заявка <code>{target_id}</code> отклонена.", parse_mode="HTML")
+        await call.answer()
+
+    # --- УПРАВЛЕНИЕ ВОРКЕРАМИ ---
+    @dp.callback_query(F.data == "adm_workers_manage")
+    async def workers_manage(call: types.CallbackQuery):
+        count = await db.db_fetchone("SELECT COUNT(*) FROM workers")
+        apps = await db.db_fetchone("SELECT COUNT(*) FROM worker_applications WHERE status='pending'")
+        
+        text = (
+            "👥 <b>Управление персоналом</b>\n\n"
+            f"• Воркеров в штате: <b>{count['count']}</b>\n"
+            f"• Новых заявок: <b>{apps['count']}</b>"
+        )
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📨 Просмотр заявок", callback_data="adm_view_apps")],
+            [InlineKeyboardButton(text="➕ Назначить по ID", callback_data="adm_add_worker_manual")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
+        ])
+        await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+    @dp.callback_query(F.data == "adm_view_apps")
+    async def view_apps(call: types.CallbackQuery):
+        apps = await db.db_fetchall("SELECT user_id, created_at FROM worker_applications WHERE status='pending' LIMIT 5")
+        if not apps:
+            return await call.answer("📩 Новых заявок нет", show_alert=True)
+        
+        await call.message.delete() # Удаляем меню, чтобы вывести карточки заявок
+        for app in apps:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✅ Принять", callback_data=f"app_accept_{app['user_id']}"),
+                    InlineKeyboardButton(text="❌ Отклонить", callback_data=f"app_decline_{app['user_id']}")
+                ]
+            ])
+            await call.message.answer(f"👤 <b>Заявка от:</b> <code>{app['user_id']}</code>\n📅 Дата: {app['created_at']}", reply_markup=kb, parse_mode="HTML")
+
+    # --- РАССЫЛКА ---
+    @dp.callback_query(F.data == "adm_broadcast")
+    async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
+        await state.set_state(AdminStates.waiting_for_broadcast_text)
+        await call.message.edit_text("📢 <b>Введите текст рассылки:</b>\n\nПоддерживается HTML-теги.", 
+                                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]]))
+
+    @dp.message(AdminStates.waiting_for_broadcast_text)
+    async def broadcast_finish(message: types.Message, state: FSMContext):
+        query = "SELECT user_id FROM balances UNION SELECT user_id FROM invoices"
+        users = await db.db_fetchall(query)
+        
+        sent = 0
+        status_msg = await message.answer(f"⏳ Отправка... (0/{len(users)})")
+        
+        for u in users:
+            try:
+                await bot.send_message(u['user_id'], message.text, parse_mode="HTML")
+                sent += 1
+            except: pass
+        
+        await status_msg.edit_text(f"✅ Рассылка завершена!\nДоставлено: <b>{sent}</b> пользователям.", parse_mode="HTML")
+        await state.clear()
+        await send_admin_menu(message)
+
+    # --- ЗАКРЫТИЕ И ПРОЧЕЕ ---
     @dp.callback_query(F.data == "adm_close")
     async def close_admin(call: types.CallbackQuery):
-        try:
-            await call.message.delete()
-        except:
-            pass
+        await call.message.delete()
         await call.answer()
