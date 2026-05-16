@@ -10,14 +10,14 @@ from handlers.common import WorkerRegStates
 logger = logging.getLogger(__name__)
 
 CLIENT_MENU_TEXT = (
-    "🏠 Главное меню клиента\n\n"
-    "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
+    "<b>🏠 Send$Paid — Главное меню</b>\n\n"
+    "<blockquote>Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
     "пополнить номер телефона или оплатить готовый QR-код.\n"
-    "Все этапы заявки фиксируются внутри сервиса.\n\n"
-    "💼 Комиссия сервиса: 20% от суммы заявки, но не меньше 30 RUB\n"
-    "🆕 Уникальная карта: дополнительно +5%\n"
-    "🔳 QR-оплата: скидка по комиссии -8%\n"
-    "⚡️ Наши работники готовы обрабатывать заявки 24/7"
+    "Все этапы заявки фиксируются внутри сервиса.</blockquote>\n\n"
+    "💼 Комиссия сервиса: <b>20%</b> от суммы, но не меньше 30 RUB\n"
+    "🆕 Уникальная карта: дополнительно <b>+5%</b>\n"
+    "🔳 QR-оплата: скидка по комиссии <b>-8%</b>\n"
+    "⚡️ Работаем <b>24/7</b>"
 )
 
 CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
@@ -40,6 +40,7 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
+    # --- ОТМЕНА ЗАЯВКИ КЛИЕНТОМ ---
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
@@ -79,6 +80,7 @@ def register_client(dp, bot):
             except:
                 pass
 
+    # --- ПОДТВЕРЖДЕНИЕ ОПЛАТЫ КЛИЕНТОМ ---
     @dp.callback_query(F.data.startswith("client_paid_"))
     async def client_paid(call: types.CallbackQuery):
         parts = call.data.split("_")
@@ -145,7 +147,7 @@ def register_client(dp, bot):
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
 
-    # ЧИСТЫЙ ЛК ДЕКОРАТОР (Без анкетных фильтров)
+    # --- ГЛАВНЫЙ ОБРАБОТЧИК КНОПОК ЛК И ПРОФИЛЕЙ ---
     @dp.callback_query(
         (
             F.data.startswith("lk_") |
@@ -158,6 +160,10 @@ def register_client(dp, bot):
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
+        & ~F.data.startswith("send_req_")        # Исключаем ручную отправку реквизитов воркером
+        & ~F.data.startswith("worker_confirm_")  # Исключаем подтверждение оплаты воркером
+        & ~F.data.startswith("worker_apply")     # Исключаем запуск анкеты
+        & ~F.data.startswith("take_")            # Исключаем взятие заявки в работу воркером
         & ~F.data.in_({"card_unique_yes", "card_unique_no", "client_support"})
     )
     async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
@@ -169,6 +175,7 @@ def register_client(dp, bot):
         except:
             pass
 
+        # Кнопка "Стать исполнителем" (Пре-инфо перед анкетой)
         if call.data == "client_become_worker":
             await bot.send_message(
                 chat_id,
@@ -187,10 +194,12 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # Назад в главное меню
         if call.data == "client_back_menu":
-            await bot.send_message(chat_id, CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
+            await bot.send_message(chat_id, CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD, parse_mode="HTML")
             return await call.answer()
 
+        # Профиль клиента
         if call.data == "client_profile":
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
@@ -220,6 +229,7 @@ def register_client(dp, bot):
             await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
 
+        # Реферальная система
         if call.data == "client_ref":
             ref_link = f"https://t.me/{(await bot.get_me()).username}?start={uid}"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -228,6 +238,7 @@ def register_client(dp, bot):
             await bot.send_message(chat_id, f"🔗 <b>Ваша реферальная ссылка:</b>\n<code>{ref_link}</code>", parse_mode="HTML", reply_markup=keyboard)
             return await call.answer()
 
+        # Техническая поддержка
         if call.data == "client_support":
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
@@ -235,6 +246,7 @@ def register_client(dp, bot):
             await bot.send_message(chat_id, "🆘 <b>Поддержка сервиса</b>\n\nПо всем вопросам обращайтесь к администратору: @usudhsuhd", parse_mode="HTML", reply_markup=keyboard)
             return await call.answer()
 
+        # Управление картами воркера
         if call.data == "lk_cards":
             cards = await db.db_fetchall("SELECT id, card_number, expiry FROM cards WHERE worker_id=$1", uid)
             card_buttons = []
@@ -247,11 +259,13 @@ def register_client(dp, bot):
             await bot.send_message(chat_id, f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}", reply_markup=keyboard)
             return await call.answer()
 
+        # Добавление новой карты (FSM)
         if call.data == "cards_add":
             await state.set_state(WorkerRegStates.waiting_for_card_data)
             await bot.send_message(chat_id, "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
             return await call.answer()
 
+        # Личный кабинет воркера (Главная)
         if call.data == "lk_home":
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
@@ -277,6 +291,7 @@ def register_client(dp, bot):
             await bot.send_message(chat_id, text, reply_markup=keyboard)
             return await call.answer()
 
+        # Просмотр конкретной карты воркера
         if call.data.startswith("card_view_"):
             card_id = int(call.data.split("_")[2])
             row = await db.db_fetchone(
@@ -302,6 +317,7 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # Удаление сохраненной карты
         if call.data.startswith("card_delete_"):
             card_id = int(call.data.split("_")[2])
             await db.db_execute("DELETE FROM cards WHERE id=$1 AND worker_id=$2", card_id, uid)
@@ -317,6 +333,7 @@ def register_client(dp, bot):
             await bot.send_message(chat_id, f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=keyboard)
             return await call.answer()
 
+        # Список активных заявок воркера
         if call.data == "lk_active":
             orders = await db.db_fetchall(
                 "SELECT id, amount, status, total_usdt FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC",
@@ -341,6 +358,7 @@ def register_client(dp, bot):
                 )
             return await call.answer()
 
+        # История выполненных заказов воркера
         if call.data == "lk_history":
             done_orders = await db.db_fetchall(
                 "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('DONE', 'CANCELLED') ORDER BY id DESC LIMIT 20",
@@ -368,6 +386,7 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # Детализация конкретного заказа воркера из истории
         if call.data.startswith("worker_history_order_"):
             order_id = int(call.data.split("_")[3])
             row = await db.db_fetchone(
@@ -393,6 +412,7 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # История заказов клиента
         if call.data == "client_history":
             active_orders = await db.db_fetchall(
                 "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC",
@@ -432,6 +452,7 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # Подробная карточка заказа клиента
         if call.data.startswith("history_order_"):
             order_id = int(call.data.split("_")[2])
             row = await db.db_fetchone(
@@ -466,4 +487,5 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # Глобальный фоллбэк для нереализованных разделов
         await call.answer("🚧 Раздел в разработке", show_alert=True)
