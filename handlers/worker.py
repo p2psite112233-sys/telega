@@ -16,17 +16,21 @@ class WorkerStates(StatesGroup):
 
 def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = False) -> str:
     """Форматирует информацию о заявке для воркера"""
-    total_rub = round(amount * (1.25 if unique else 1.20), 2)
-    worker_usdt = round(total_usdt * 0.8, 4)
+    commission = max(round(amount * (0.25 if unique else 0.20), 2), 30)
+    total_rub = round(amount + commission, 2)
+    amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
+    commission_usdt = round(total_usdt - amount_usdt, 4)
+    worker_net_usdt = round(commission_usdt * 0.8, 4)
+    worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
     unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
     return (
-        f"🆔 ID: #{order_id}\n"
+        f"🆔 ID заявки: #{order_id}\n"
         f"💳 Услуга: Карта под оплату\n"
-        f"💰 Сумма: {amount:.2f} RUB\n"
-        f"💲 Резерв: {total_usdt:.4f} USDT\n"
-        f"💎 К оплате: {total_rub:.2f} RUB\n"
-        f"🃏 {unique_text}\n"
-        f"💵 Ваш заработок: {worker_usdt:.4f} USDT"
+        f"🃏 {unique_text}\n\n"
+        f"💰 Сумма перевода: {amount:.2f} RUB (~{amount_usdt:.4f} USDT)\n"
+        f"💎 Клиент оплатит: {total_rub:.2f} RUB\n\n"
+        f"💵 Ваш чистый заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+        f"📊 Итог к зачислению вам: <b>{worker_total_usdt:.4f} USDT</b>"
     )
 
 
@@ -137,6 +141,7 @@ def register_worker(dp, bot):
         await call.message.answer(
             f"✅ Вы взяли заказ #{order_id}\n\n"
             f"{order_info(order_id, amount, total_usdt)}",
+            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")]
             ])
@@ -224,7 +229,8 @@ def register_worker(dp, bot):
         await call.message.answer(
             f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
             f"{order_info(order_id, float(order['amount']), total_usdt)}\n\n"
-            f"⏳ Ожидаем запрос кода от клиента"
+            f"⏳ Ожидаем запрос кода от клиента",
+            parse_mode="HTML"
         )
 
     @dp.callback_query(F.data.startswith("request_code_"))
@@ -329,6 +335,7 @@ def register_worker(dp, bot):
         await message.answer(
             f"✅ Код отправлен клиенту\n\n"
             f"{order_info(order_id, amount, total_usdt)}",
+            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order_id}")]
             ])
@@ -373,6 +380,7 @@ def register_worker(dp, bot):
             pass
         await call.message.answer(
             f"⏳ Ожидаем подтверждения от клиента\n\n"
-            f"{order_info(order_id, float(order['amount']), total_usdt)}"
+            f"{order_info(order_id, float(order['amount']), total_usdt)}",
+            parse_mode="HTML"
         )
         await call.answer()
