@@ -137,11 +137,11 @@ def register_client(dp, bot):
             await bot.send_message(
                 worker_id,
                 f"✅ Заявка #{order_id} завершена!\n\n"
-                f"🆔 ID: #{order_id}\n"
-                f"💳 Услуга: Карта под оплату\n"
-                f"💰 Сумма: {amount:.2f} RUB\n\n"
-                f"💎 Зачислено: {worker_amount:.4f} USDT\n"
-                f"💰 Ваш баланс: {worker_balance:.2f} USDT"
+                f"🆔 <b>ID заявки:</b> #{order_id}\n"
+                f"💳 <b>Услуга:</b> Карта под оплату\n\n"
+                f"💎 <b>Зачислено:</b> {worker_amount:.4f} USDT\n"
+                f"💰 <b>Ваш баланс:</b> {worker_balance:.2f} USDT",
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
