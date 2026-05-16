@@ -88,7 +88,7 @@ def register_common(dp, bot: Bot):
                 InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
                 InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
             ],
-            [InlineKeyboardButton(text="🆘 Поддержка", callback_data="client_support")]
+            [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
         ])
         await message.answer_photo(photo=BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
 
