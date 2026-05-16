@@ -13,7 +13,7 @@ from utils.shared import get_role, set_role, workers
 
 logger = logging.getLogger(__name__)
 
-# --- FSM СОСТОЯНИЯ --- 
+# --- FSM СОСТОЯНИЯ ---
 class ClientStates(StatesGroup):
     waiting_for_topup_amount = State()
     waiting_for_order_unique = State()
@@ -213,9 +213,10 @@ def register_common(dp, bot: Bot):
                 pass
 
         if unique:
-            total = round(rub * 1.25, 2)
+            commission = max(round(rub * 0.25, 2), 30)
         else:
-            total = round(rub * 1.20, 2)
+            commission = max(round(rub * 0.20, 2), 30)
+        total = round(rub + commission, 2)
 
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
