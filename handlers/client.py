@@ -154,6 +154,7 @@ def register_client(dp, bot):
     )
     async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
         uid = call.from_user.id
+        chat_id = call.message.chat.id
 
         try:
             await call.message.delete()
@@ -165,7 +166,8 @@ def register_client(dp, bot):
             return
 
         if call.data == "client_become_worker":
-            await call.message.answer(
+            await bot.send_message(
+                chat_id,
                 "<b>📝 Заявка на роль исполнителя</b>\n"
                 "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
                 "Все ответы отправятся одной заявкой на рассмотрение администрации после финальной проверки.</blockquote>\n"
@@ -182,7 +184,7 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "client_back_menu":
-            await call.message.answer(CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
+            await bot.send_message(chat_id, CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
             return await call.answer()
 
         if call.data == "client_profile":
@@ -211,7 +213,7 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
             ])
-            await call.message.answer_photo(photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
+            await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
 
         if call.data == "lk_cards":
@@ -223,15 +225,12 @@ def register_client(dp, bot):
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
-            await call.message.answer(
-                f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}",
-                reply_markup=keyboard
-            )
+            await bot.send_message(chat_id, f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "cards_add":
             await state.set_state(WorkerRegStates.waiting_for_card_data)
-            await call.message.answer("➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
+            await bot.send_message(chat_id, "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
             return await call.answer()
 
         if call.data == "lk_home":
@@ -256,7 +255,7 @@ def register_client(dp, bot):
                  InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")],
                 [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")]
             ])
-            await call.message.answer(text, reply_markup=keyboard)
+            await bot.send_message(chat_id, text, reply_markup=keyboard)
             return await call.answer()
 
         if call.data.startswith("card_view_"):
@@ -272,7 +271,8 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="◀️ К списку карт", callback_data="lk_cards")],
                 [InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")]
             ])
-            await call.message.answer(
+            await bot.send_message(
+                chat_id,
                 f"💳 Карточка карты\n\n"
                 f"💳 Номер: {row['card_number']}\n"
                 f"📅 Срок: {row['expiry']}\n"
@@ -295,7 +295,7 @@ def register_client(dp, bot):
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
-            await call.message.answer(f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=keyboard)
+            await bot.send_message(chat_id, f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "lk_active":
@@ -304,7 +304,7 @@ def register_client(dp, bot):
                 uid
             )
             if not orders:
-                await call.message.answer("🟢 Активных заявок нет")
+                await bot.send_message(chat_id, "🟢 Активных заявок нет")
                 return await call.answer()
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
@@ -312,7 +312,8 @@ def register_client(dp, bot):
                     [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order['id']}")],
                     [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order['id']}")]
                 ])
-                await call.message.answer(
+                await bot.send_message(
+                    chat_id,
                     f"🟢 Заявка #{order['id']}\n\n"
                     f"💰 Сумма: {float(order['amount']):.2f} RUB\n"
                     f"💎 К получению: {total_usdt:.4f} USDT\n"
@@ -327,7 +328,7 @@ def register_client(dp, bot):
                 uid
             )
             if not done_orders:
-                await call.message.answer("📚 История заявок пуста")
+                await bot.send_message(chat_id, "📚 История заявок пуста")
                 return await call.answer()
             buttons = []
             for order in done_orders:
@@ -339,7 +340,8 @@ def register_client(dp, bot):
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            await call.message.answer_photo(
+            await bot.send_photo(
+                chat_id,
                 photo=PROFILE_BANNER_FILE_ID,
                 caption="<b>📚 История воркера</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
                 parse_mode="HTML",
@@ -360,7 +362,8 @@ def register_client(dp, bot):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]
             ])
-            await call.message.answer(
+            await bot.send_message(
+                chat_id,
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
                 f"💳 Услуга: Карта под оплату\n"
                 f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
@@ -381,7 +384,7 @@ def register_client(dp, bot):
                 uid
             )
             if not active_orders and not done_orders:
-                await call.message.answer("📚 История заявок пуста")
+                await bot.send_message(chat_id, "📚 История заявок пуста")
                 return await call.answer()
             buttons = []
             for order in active_orders:
@@ -401,7 +404,8 @@ def register_client(dp, bot):
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            await call.message.answer_photo(
+            await bot.send_photo(
+                chat_id,
                 photo=PROFILE_BANNER_FILE_ID,
                 caption="<b>📚 История клиента</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
                 parse_mode="HTML",
@@ -431,7 +435,8 @@ def register_client(dp, bot):
             if status in ("NEW", "IN_PROGRESS"):
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            await call.message.answer(
+            await bot.send_message(
+                chat_id,
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
                 f"💳 Услуга: Карта под оплату\n"
                 f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
