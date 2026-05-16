@@ -22,6 +22,8 @@ class ClientStates(StatesGroup):
 class WorkerRegStates(StatesGroup):
     waiting_for_card_data = State()
     waiting_for_bank_name = State()
+    waiting_for_experience = State()
+    waiting_for_next_step = State()
 
 # --- КЛАВИАТУРЫ ---
 menu = ReplyKeyboardMarkup(
@@ -106,7 +108,7 @@ def register_common(dp, bot: Bot):
         await call.answer()
 
     @dp.message(ClientStates.waiting_for_topup_amount)
-    async def process_topup_amount(message: types.Message, state: FSMContext):
+    async def process_topup_amount(message: types.Message, state: FSMContext, bot: Bot):
         try:
             amount_rub = float(message.text.strip())
             if amount_rub < 100:
@@ -187,7 +189,7 @@ def register_common(dp, bot: Bot):
         await call.answer()
 
     @dp.message(ClientStates.waiting_for_order_amount)
-    async def process_order_amount(message: types.Message, state: FSMContext):
+    async def process_order_amount(message: types.Message, state: FSMContext, bot: Bot):
         try:
             rub = float(message.text.strip())
             if rub <= 0:
