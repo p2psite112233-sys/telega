@@ -195,7 +195,22 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
-        if call.data == "client_back_menu":
+        if call.data == "client_become_worker":
+            await call.message.answer(
+                "<b>📝 Заявка на роль исполнителя</b>\n\n"
+                "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
+                "Все ответы отправятся одной заявкой на рассмотрение администрации после финальной проверки.</blockquote>\n\n"
+                "Что важно:\n"
+                "• можно вернуться к предыдущему вопросу;\n"
+                "• можно отменить заполнение в любой момент;\n"
+                "• перед отправкой будет итоговая сверка.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✍️ Отправить заявку", callback_data="worker_apply")],
+                    [InlineKeyboardButton(text="🔙 Домой", callback_data="client_back_menu")]
+                ])
+            )
+            return await call.answer()
             await call.message.answer(CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
             return await call.answer()
 
