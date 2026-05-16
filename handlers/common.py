@@ -20,9 +20,18 @@ class ClientStates(StatesGroup):
     waiting_for_order_amount = State()
 
 class WorkerRegStates(StatesGroup):
+    # Управление картами
     waiting_for_card_data = State()
     waiting_for_bank_name = State()
-    waiting_for_experience = State()
+    
+    # Анкета регистрации воркера (Шаги 1-7)
+    waiting_for_main_acc = State()    # Шаг 2
+    waiting_for_experience = State()  # Шаг 3
+    waiting_for_directions = State()  # Шаг 4
+    waiting_for_chats = State()       # Шаг 5
+    waiting_for_work_hours = State()  # Шаг 6
+    waiting_for_extra_info = State()  # Шаг 7 (Текстовый ввод)
+    
     waiting_for_next_step = State()
 
 # --- КЛАВИАТУРЫ ---
@@ -222,7 +231,7 @@ def register_common(dp, bot: Bot):
 
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
-        amount_usdt = round(rub / rate, 4)  # Чистая сумма без комиссии
+        amount_usdt = round(rub / rate, 4)
 
         if not await db.freeze_balance(uid, total_usdt):
             balance = await db.get_balance(uid)
