@@ -3,116 +3,86 @@ from aiogram import types, F, Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timedelta, timezone
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
 
 import db
 from config import ADMIN_ID
-from utils.shared import set_role
 
 logger = logging.getLogger(__name__)
 
-class AdminPanel(StatesGroup):
-    waiting_for_id = State()
-
 def register_admin(dp, bot: Bot):
 
-    # --- ГЛАВНОЕ МЕНЮ ---
+    # 1. ГЛАВНОЕ МЕНЮ (с очисткой стейтов клиента)
     @dp.message(F.text == "/admin")
     async def admin_main_menu(message: types.Message, state: FSMContext):
         if message.from_user.id != ADMIN_ID: return
-        await state.clear()
+        await state.clear() # Сбрасываем вводы суммы и прочее из common.py
         
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📊 Статистика", callback_data="adm_stats_menu")],
             [InlineKeyboardButton(text="👥 Воркеры", callback_data="adm_workers_menu")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
         ])
-        await message.answer("🛠 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=kb)
+        await message.answer("🛠 <b>Панель администратора</b>", reply_markup=kb)
 
-    # --- ОБРАБОТКА ВСЕХ КНОПОК НАВИГАЦИИ ---
+    # 2. МЕНЮ СТАТИСТИКИ
     @dp.callback_query(F.data == "adm_stats_menu")
-    async def stats_menu(call: types.CallbackQuery):
+    async def stats_menu(call: types.CallbackQuery, state: FSMContext):
+        await state.clear()
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="📅 День", callback_data="st_day"),
                 InlineKeyboardButton(text="📆 Неделя", callback_data="st_week"),
                 InlineKeyboardButton(text="🗓 Месяц", callback_data="st_month")
             ],
-            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back")]
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
         ])
-        await call.message.edit_text("📊 <b>Выберите период:</b>", parse_mode="HTML", reply_markup=kb)
+        await call.message.edit_text("📈 <b>Выберите период для отчета:</b>", reply_markup=kb)
         await call.answer()
 
-    @dp.callback_query(F.data == "adm_workers_menu")
-    async def workers_menu(call: types.CallbackQuery):
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔍 Найти воркера по ID", callback_data="adm_find")],
-            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back")]
-        ])
-        await call.message.edit_text("👤 <b>Управление персоналом</b>", parse_mode="HTML", reply_markup=kb)
-        await call.answer()
-
-    # --- ЛОГИКА СТАТИСТИКИ (поменял префикс на st_ для надежности) ---
+    # 3. ОБРАБОТКА СТАТИСТИКИ
     @dp.callback_query(F.data.startswith("st_"))
     async def process_stats(call: types.CallbackQuery):
         period = call.data.split("_")[1]
         now = datetime.now(timezone.utc)
         
-        if period == "day": since = now - timedelta(days=1); lab = "день"
-        elif period == "week": since = now - timedelta(weeks=1); lab = "неделю"
-        else: since = now - timedelta(days=30); lab = "месяц"
+        if period == "day": since = now - timedelta(days=1); label = "день"
+        elif period == "week": since = now - timedelta(weeks=1); label = "неделю"
+        else: since = now - timedelta(days=30); label = "месяц"
 
-        row = await db.db_fetchone("SELECT COUNT(*) as total FROM orders WHERE created_at >= $1", since)
-        total = row["total"] if row else 0
+        try:
+            # Запрос к твоей таблице заказов
+            row = await db.db_fetchone("SELECT COUNT(*) as total FROM orders WHERE created_at >= $1", since)
+            total = row["total"] if row else 0
 
-        await call.message.edit_text(
-            f"📈 Статистика за {lab}:\n\nВсего заказов: {total}",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_stats_menu")]])
-        )
-        await call.answer()
+            text = (f"📈 <b>Статистика за {label}:</b>\n\n"
+                    f"▫️ Всего заказов: <b>{total}</b>")
 
-    # --- ПОИСК И КНОПКИ УПРАВЛЕНИЯ ---
-    @dp.callback_query(F.data == "adm_find")
-    async def find_start(call: types.CallbackQuery, state: FSMContext):
-        await state.set_state(AdminPanel.waiting_for_id)
-        await call.message.edit_text("Введите ID воркера:")
-        await call.answer()
-
-    @dp.message(AdminPanel.waiting_for_id)
-    async def find_finish(message: types.Message, state: FSMContext):
-        if not message.text.isdigit(): return await message.answer("Только цифры!")
-        target_id = int(message.text)
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_stats_menu")]
+            ])
+            await call.message.edit_text(text, reply_markup=kb)
+        except Exception as e:
+            await call.message.answer(f"⚠️ Ошибка БД: <code>{e}</code>")
         
+        await call.answer()
+
+    # 4. УПРАВЛЕНИЕ ВОРКЕРАМИ
+    @dp.callback_query(F.data == "adm_workers_menu")
+    async def workers_menu(call: types.CallbackQuery):
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚫 Бан/Разбан", callback_data=f"act_ban_{target_id}")],
-            [InlineKeyboardButton(text="🗑 Уволить", callback_data=f"act_fire_{target_id}")],
-            [InlineKeyboardButton(text="⏪ В меню", callback_data="adm_back")]
+            [InlineKeyboardButton(text="🔍 Найти по ID", callback_data="adm_find_worker")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
         ])
-        await message.answer(f"Управление юзером <code>{target_id}</code>", parse_mode="HTML", reply_markup=kb)
-        await state.clear()
+        await call.message.edit_text("👤 <b>Управление персоналом</b>", reply_markup=kb)
+        await call.answer()
 
-    # --- ДЕЙСТВИЯ (БАН/УВОЛЬНЕНИЕ) ---
-    @dp.callback_query(F.data.startswith("act_"))
-    async def actions(call: types.CallbackQuery):
-        parts = call.data.split("_")
-        act, tid = parts[1], int(parts[2])
-        
-        if act == "ban":
-            await db.db_execute("UPDATE workers SET is_banned = NOT is_banned WHERE user_id=$1", tid)
-            await call.answer("Статус изменен")
-        elif act == "fire":
-            await db.db_execute("DELETE FROM workers WHERE user_id=$1", tid)
-            set_role(tid, "client")
-            await call.answer("Уволен")
-        await call.message.delete()
-
-    # --- СИСТЕМНЫЕ КНОПКИ ---
-    @dp.callback_query(F.data == "adm_back")
-    async def back(call: types.CallbackQuery, state: FSMContext):
+    # 5. НАВИГАЦИЯ (НАЗАД / ЗАКРЫТЬ)
+    @dp.callback_query(F.data == "adm_back_to_main")
+    async def back_to_main(call: types.CallbackQuery, state: FSMContext):
         await admin_main_menu(call.message, state)
         await call.answer()
 
     @dp.callback_query(F.data == "adm_close")
-    async def close(call: types.CallbackQuery):
+    async def close_admin(call: types.CallbackQuery):
         await call.message.delete()
         await call.answer()
