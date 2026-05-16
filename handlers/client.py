@@ -66,8 +66,7 @@ def register_client(dp, bot):
 
         try:
             await call.message.edit_text(
-                f"❌ Заявка #{order_id} отменена\n\n"
-                f"💰 Средства возвращены на баланс"
+                f"❌ Заявка #{order_id} отменена\n\n💰 Средства возвращены на баланс"
             )
         except Exception as e:
             logger.error(f"[cancel_order] edit error: {e}")
@@ -161,6 +160,31 @@ def register_client(dp, bot):
         except:
             pass
 
+        if call.data == "worker_apply":
+            await call.answer("🚧 Раздел в разработке", show_alert=True)
+            return
+
+        if call.data == "client_become_worker":
+            await call.message.answer(
+                "<b>📝 Заявка на роль исполнителя</b>\n"
+                "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
+                "Все ответы отправятся одной заявкой на рассмотрение администрации после финальной проверки.</blockquote>\n"
+                "Что важно:\n"
+                "• можно вернуться к предыдущему вопросу;\n"
+                "• можно отменить заполнение в любой момент;\n"
+                "• перед отправкой будет итоговая сверка.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✍️ Отправить заявку", callback_data="worker_apply")],
+                    [InlineKeyboardButton(text="🔙 Домой", callback_data="client_back_menu")]
+                ])
+            )
+            return await call.answer()
+
+        if call.data == "client_back_menu":
+            await call.message.answer(CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
+            return await call.answer()
+
         if call.data == "client_profile":
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
@@ -187,35 +211,7 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
             ])
-            await call.message.answer_photo(
-                photo=PROFILE_BANNER_FILE_ID,
-                caption=text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-            return await call.answer()
-
-        if call.data == "worker_apply":
-            await call.answer("🚧 Раздел в разработке", show_alert=True)
-            return
-
-        if call.data == "client_become_worker":
-            await call.message.answer(
-                "<b>📝 Заявка на роль исполнителя</b>\n"
-                "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
-                "Все ответы отправятся одной заявкой на рассмотрение администрации после финальной проверки.</blockquote>\n"
-                "Что важно:\n"
-                "• можно вернуться к предыдущему вопросу;\n"
-                "• можно отменить заполнение в любой момент;\n"
-                "• перед отправкой будет итоговая сверка.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✍️ Отправить заявку", callback_data="worker_apply")],
-                    [InlineKeyboardButton(text="🔙 Домой", callback_data="client_back_menu")]
-                ])
-            )
-            return await call.answer()
-            await call.message.answer(CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
+            await call.message.answer_photo(photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
 
         if call.data == "lk_cards":
@@ -235,9 +231,7 @@ def register_client(dp, bot):
 
         if call.data == "cards_add":
             await state.set_state(WorkerRegStates.waiting_for_card_data)
-            await call.message.answer(
-                "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV."
-            )
+            await call.message.answer("➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
             return await call.answer()
 
         if call.data == "lk_home":
@@ -258,10 +252,8 @@ def register_client(dp, bot):
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
-                [
-                    InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
-                    InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")
-                ],
+                [InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
+                 InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")],
                 [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")]
             ])
             await call.message.answer(text, reply_markup=keyboard)
@@ -303,11 +295,8 @@ def register_client(dp, bot):
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
-            await call.message.answer(
-                f"💳 Управление картами\n\nСохранено карт: {len(cards)}",
-                reply_markup=keyboard
-            )
-            return
+            await call.message.answer(f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=keyboard)
+            return await call.answer()
 
         if call.data == "lk_active":
             orders = await db.db_fetchall(
@@ -352,10 +341,7 @@ def register_client(dp, bot):
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             await call.message.answer_photo(
                 photo=PROFILE_BANNER_FILE_ID,
-                caption=(
-                    "<b>📚 История воркера</b>\n\n"
-                    "<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>"
-                ),
+                caption="<b>📚 История воркера</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
@@ -384,6 +370,8 @@ def register_client(dp, bot):
                 reply_markup=keyboard
             )
             return await call.answer()
+
+        if call.data == "client_history":
             active_orders = await db.db_fetchall(
                 "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC",
                 uid
@@ -415,10 +403,7 @@ def register_client(dp, bot):
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             await call.message.answer_photo(
                 photo=PROFILE_BANNER_FILE_ID,
-                caption=(
-                    "<b>📚 История клиента</b>\n\n"
-                    "<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>"
-                ),
+                caption="<b>📚 История клиента</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
                 parse_mode="HTML",
                 reply_markup=keyboard
             )
@@ -442,11 +427,9 @@ def register_client(dp, bot):
                 status_text = "❌ Отменена"
             else:
                 status_text = "🟡 Новая"
-
             buttons = [[InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]]
             if status in ("NEW", "IN_PROGRESS"):
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
-
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             await call.message.answer(
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
