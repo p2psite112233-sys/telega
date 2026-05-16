@@ -1,5 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
+from datetime import datetime, timedelta, timezone
+
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -8,9 +10,6 @@ import db
 from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import WorkerRegStates
-
-# Юзернейм поддержки без знака @
-SUPPORT_USERNAME = "usudhsuhd"
 
 CLIENT_MENU_TEXT = (
     "🏠 Главное меню клиента\n\n"
@@ -37,8 +36,7 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
         InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
         InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
     ],
-    # Кнопка перенаправляет сразу в диалог поддержки
-    [InlineKeyboardButton(text="🆘 Поддержка", url=f"https://t.me/{SUPPORT_USERNAME}")]
+    [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
 ])
 
 
@@ -49,24 +47,29 @@ def register_client(dp, bot):
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
 
-        row = await db.db_fetchone(
-            "SELECT status, total_usdt, worker_id FROM orders WHERE id=$1 AND user_id=$2",
+        # ЗАЩИТА ОТ ГОНКИ: Сначала атомарно меняем статус. 
+        result = await db.db_execute(
+            "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND user_id=$2 AND status IN ('NEW', 'IN_PROGRESS')",
             order_id, uid
         )
-        if not row:
-            return await call.answer("❌ Заявка не найдена", show_alert=True)
+        
+        if "UPDATE 0" in result:
+            row = await db.db_fetchone("SELECT status FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
+            if not row:
+                return await call.answer("❌ Заявка не найдена", show_alert=True)
+            if row["status"] == "DONE":
+                return await call.answer("❌ Нельзя отменить завершённую заявку", show_alert=True)
+            return await call.answer("❌ Заявка уже отменена", show_alert=True)
 
-        status = row["status"]
-        if status == "DONE":
-            return await call.answer("❌ Нельзя отменить завершённую заявку", show_alert=True)
-        if status not in ("NEW", "IN_PROGRESS"):
-            return await call.answer("❌ Заявку нельзя отменить", show_alert=True)
+        row = await db.db_fetchone(
+            "SELECT total_usdt, worker_id FROM orders WHERE id=$1", order_id
+        )
+        
+        total_usdt = float(row["total_usdt"]) if row and row["total_usdt"] else 0.0
+        worker_id = row["worker_id"] if row else None
 
-        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
-        worker_id = row["worker_id"]
-
-        await db.unfreeze_back(uid, total_usdt)
-        await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
+        if total_usdt > 0:
+            await db.unfreeze_back(uid, total_usdt)
 
         try:
             await call.message.edit_text(
@@ -79,9 +82,9 @@ def register_client(dp, bot):
 
         if worker_id:
             try:
-                await bot.send_message(worker_id, f"❌ Заявка #{order_id} была отменена клиентом")
-            except:
-                pass
+                await call.bot.send_message(worker_id, f"❌ Заявка #{order_id} была отменена клиентом")
+            except Exception as e:
+                logger.error(f"[cancel_order] notify worker error: {e}")
 
     @dp.callback_query(F.data.startswith("client_paid_"))
     async def client_paid(call: types.CallbackQuery):
@@ -96,23 +99,31 @@ def register_client(dp, bot):
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-        worker_id = row["worker_id"]
-        amount = float(row["amount"])
-        status = row["status"]
-        client_msg_id = row["client_message_id"]
-        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
-        amount_usdt = float(row["amount_usdt"]) if row["amount_usdt"] else 0.0
-
-        if status == "DONE":
+        if row["status"] == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
+        if row["status"] == "CANCELLED":
+            return await call.answer("❌ Заявка уже отменена", show_alert=True)
 
+        # ЗАЩИТА ОТ ГОНКИ: Меняем статус только если он сейчас в работе
         result = await db.db_execute(
             "UPDATE orders SET status='DONE' WHERE id=$1 AND status='IN_PROGRESS'",
             order_id
         )
+        
+        # Исправлено: Проверяем реальный статус, если апдейт не прошел
         if "UPDATE 0" in result:
+            current_status = await db.db_fetchone("SELECT status FROM orders WHERE id=$1", order_id)
+            if current_status and current_status["status"] == "CANCELLED":
+                return await call.answer("❌ Заявка была отменена", show_alert=True)
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
+        worker_id = row["worker_id"]
+        amount = float(row["amount"])
+        client_msg_id = row["client_message_id"]
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
+        amount_usdt = float(row["amount_usdt"]) if row["amount_usdt"] else 0.0
+
+        # Переводим заблокированные средства воркеру
         await db.unfreeze_to_worker(uid, worker_id, total_usdt, amount_usdt)
 
         client_balance_new = await db.get_balance(uid)
@@ -120,7 +131,7 @@ def register_client(dp, bot):
         worker_amount = round(amount_usdt + (total_usdt - amount_usdt) * 0.8, 4)
 
         try:
-            await bot.edit_message_text(
+            await call.bot.edit_message_text(
                 chat_id=uid,
                 message_id=client_msg_id,
                 text=f"✅ Заявка #{order_id} завершена!\n\n"
@@ -137,7 +148,7 @@ def register_client(dp, bot):
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
         try:
-            await bot.send_message(
+            await call.bot.send_message(
                 worker_id,
                 f"✅ Заявка #{order_id} завершена!\n\n"
                 f"🆔 <b>ID заявки:</b> #{order_id}\n"
@@ -157,6 +168,7 @@ def register_client(dp, bot):
             F.data.startswith("card_") |
             F.data.startswith("history_") |
             F.data.startswith("worker_history_") |
+            F.data.startswith("apply_q") |
             (F.data == "worker_apply")
         )
         & ~F.data.startswith("client_paid_")
@@ -173,12 +185,82 @@ def register_client(dp, bot):
         except:
             pass
 
+        if call.data != "cards_add":
+            await state.clear()
+
         if call.data == "worker_apply":
-            await call.answer("🚧 Раздел в разработке", show_alert=True)
-            return
+            row = await db.db_fetchone(
+                "SELECT next_apply_at FROM worker_applications WHERE user_id=$1", uid
+            )
+            if row and row["next_apply_at"]:
+                next_apply = row["next_apply_at"]
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                if next_apply > now:
+                    formatted = next_apply.strftime("%d.%m.%Y в %H:%M")
+                    await call.bot.send_message(
+                        chat_id,
+                        f"⏳ <b>Повторная подача пока недоступна</b>\n\n"
+                        f"Вы сможете отправить новую заявку только после: <b>{formatted}</b>.",
+                        parse_mode="HTML",
+                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+                        ])
+                    )
+                    return await call.answer()
+
+            username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
+            await call.bot.send_message(
+                chat_id,
+                f"<b>📝 Заполнение анкеты исполнителя</b>\n\n"
+                f"<blockquote>Ответьте на вопросы по шагам. На каждом этапе можно вернуться назад или остановить заполнение.</blockquote>\n\n"
+                f"1️⃣ Ваш основной аккаунт — {username}?",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Да", callback_data="apply_q1_yes")],
+                    [InlineKeyboardButton(text="❌ Нет", callback_data="apply_q1_no")],
+                    [InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
+                ])
+            )
+            return await call.answer()
+
+        if call.data == "apply_q1_no":
+            next_apply = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
+            
+            await db.db_execute(
+                """INSERT INTO worker_applications (user_id, status, next_apply_at)
+                   VALUES ($1, 'rejected', $2)
+                   ON CONFLICT (user_id) DO UPDATE SET status='rejected', next_apply_at=$2""",
+                uid, next_apply
+            )
+
+            formatted = next_apply.strftime("%d.%m.%Y в %H:%M")
+            await call.bot.send_message(
+                chat_id,
+                f"❌ <b>Подача заявки отклонена</b>\n\n"
+                f"К сожалению, мы принимаем анкеты только с ваших основных рабочих аккаунтов Telegram.\n"
+                f"Пожалуйста, зайдите со своего главного профиля и повторите попытку.\n\n"
+                f"⏳ Следующая попытка подачи станет доступна: <b>{formatted}</b>.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Вернуться в меню", callback_data="client_back_menu")]
+                ])
+            )
+            return await call.answer()
+
+        if call.data == "apply_q1_yes":
+            await call.bot.send_message(
+                chat_id,
+                "🚧 <b>Следующий шаг анкеты находится в разработке</b>\n\n"
+                "Логика подтверждения основного аккаунта сейчас настраивается.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Вернуться в меню", callback_data="client_back_menu")]
+                ])
+            )
+            return await call.answer()
 
         if call.data == "client_become_worker":
-            await bot.send_message(
+            await call.bot.send_message(
                 chat_id,
                 "<b>📝 Заявка на роль исполнителя</b>\n"
                 "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
@@ -196,7 +278,7 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "client_back_menu":
-            await bot.send_message(chat_id, CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
+            await call.bot.send_message(chat_id, CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD)
             return await call.answer()
 
         if call.data == "client_profile":
@@ -225,15 +307,15 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
             ])
-            await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
+            await call.bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
 
         if call.data == "client_ref":
-            ref_link = f"https://t.me/{(await bot.get_me()).username}?start={uid}"
+            ref_link = f"https://t.me/{(await call.bot.get_me()).username}?start={uid}"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад в профиль", callback_data="client_profile")]
             ])
-            await bot.send_message(chat_id, f"🔗 <b>Ваша реферальная ссылка:</b>\n<code>{ref_link}</code>", parse_mode="HTML", reply_markup=keyboard)
+            await call.bot.send_message(chat_id, f"🔗 <b>Ваша реферальная ссылка:</b>\n<code>{ref_link}</code>", parse_mode="HTML", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "lk_cards":
@@ -245,12 +327,12 @@ def register_client(dp, bot):
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
-            await bot.send_message(chat_id, f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}", reply_markup=keyboard)
+            await call.bot.send_message(chat_id, f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "cards_add":
             await state.set_state(WorkerRegStates.waiting_for_card_data)
-            await bot.send_message(chat_id, "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
+            await call.bot.send_message(chat_id, "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
             return await call.answer()
 
         if call.data == "lk_home":
@@ -275,7 +357,7 @@ def register_client(dp, bot):
                  InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")],
                 [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")]
             ])
-            await bot.send_message(chat_id, text, reply_markup=keyboard)
+            await call.bot.send_message(chat_id, text, reply_markup=keyboard)
             return await call.answer()
 
         if call.data.startswith("card_view_"):
@@ -291,7 +373,7 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="◀️ К списку карт", callback_data="lk_cards")],
                 [InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")]
             ])
-            await bot.send_message(
+            await call.bot.send_message(
                 chat_id,
                 f"💳 Карточка карты\n\n"
                 f"💳 Номер: {row['card_number']}\n"
@@ -315,7 +397,7 @@ def register_client(dp, bot):
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
-            await bot.send_message(chat_id, f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=keyboard)
+            await call.bot.send_message(chat_id, f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "lk_active":
@@ -324,7 +406,7 @@ def register_client(dp, bot):
                 uid
             )
             if not orders:
-                await bot.send_message(chat_id, "🟢 Активных заявок нет")
+                await call.bot.send_message(chat_id, "🟢 Активных заявок нет")
                 return await call.answer()
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
@@ -332,7 +414,7 @@ def register_client(dp, bot):
                     [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order['id']}")],
                     [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order['id']}")]
                 ])
-                await bot.send_message(
+                await call.bot.send_message(
                     chat_id,
                     f"🟢 Заявка #{order['id']}\n\n"
                     f"💰 Сумма: {float(order['amount']):.2f} RUB\n"
@@ -348,7 +430,7 @@ def register_client(dp, bot):
                 uid
             )
             if not done_orders:
-                await bot.send_message(chat_id, "📚 История заявок пуста")
+                await call.bot.send_message(chat_id, "📚 История заявок пуста")
                 return await call.answer()
             buttons = []
             for order in done_orders:
@@ -360,7 +442,7 @@ def register_client(dp, bot):
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            await bot.send_photo(
+            await call.bot.send_photo(
                 chat_id,
                 photo=PROFILE_BANNER_FILE_ID,
                 caption="<b>📚 История воркера</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
@@ -382,7 +464,7 @@ def register_client(dp, bot):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]
             ])
-            await bot.send_message(
+            await call.bot.send_message(
                 chat_id,
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
                 f"💳 Услуга: Карта под оплату\n"
@@ -404,7 +486,7 @@ def register_client(dp, bot):
                 uid
             )
             if not active_orders and not done_orders:
-                await bot.send_message(chat_id, "📚 История заявок пуста")
+                await call.bot.send_message(chat_id, "📚 История заявок пуста")
                 return await call.answer()
             buttons = []
             for order in active_orders:
@@ -424,7 +506,7 @@ def register_client(dp, bot):
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            await bot.send_photo(
+            await call.bot.send_photo(
                 chat_id,
                 photo=PROFILE_BANNER_FILE_ID,
                 caption="<b>📚 История клиента</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
@@ -455,7 +537,7 @@ def register_client(dp, bot):
             if status in ("NEW", "IN_PROGRESS"):
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-            await bot.send_message(
+            await call.bot.send_message(
                 chat_id,
                 f"<b>📋 Заявка #{row['id']}</b>\n\n"
                 f"💳 Услуга: Карта под оплату\n"
