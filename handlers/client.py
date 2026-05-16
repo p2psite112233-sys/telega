@@ -239,7 +239,7 @@ def register_client(dp, bot):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
             ])
-            await bot.send_message(chat_id, "🆘 <b>Поддержка сервиса</b>\n\nПо всем вопросам обращайтесь к администратору: @твой_юзернейм_саппорта", parse_mode="HTML", reply_markup=keyboard)
+            await bot.send_message(chat_id, "🆘 <b>Поддержка сервиса</b>\n\nПо всем вопросам обращайтесь к администратору: @usudhsuhd", parse_mode="HTML", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "lk_cards":
