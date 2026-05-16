@@ -13,9 +13,9 @@ def register_apply(dp, bot: Bot):
 
     # --- ШАГ 1: Старт анкеты ---
     @dp.callback_query(F.data == "worker_apply")
-    async def worker_apply_start(call: types.CallbackQuery):
+    async def worker_apply_start(call: types.CallbackQuery, state: FSMContext):
+        await state.clear() # Очищаем стейт при новом начале
         uid = call.from_user.id
-        chat_id = call.message.chat.id
         
         try:
             await call.message.delete()
@@ -31,7 +31,7 @@ def register_apply(dp, bot: Bot):
             if next_apply.replace(tzinfo=timezone.utc) > now:
                 formatted = next_apply.strftime("%d %B %Y г., %H:%M")
                 await bot.send_message(
-                    chat_id,
+                    call.message.chat.id,
                     f"⏳ <b>Повторная подача пока недоступна</b>\n\n"
                     f"Повторную заявку можно подать после {formatted}.",
                     parse_mode="HTML"
@@ -40,7 +40,7 @@ def register_apply(dp, bot: Bot):
 
         username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
         await bot.send_message(
-            chat_id,
+            call.message.chat.id,
             f"<b>📝 Заполнение анкеты исполнителя</b>\n\n"
             f"<blockquote>Ответьте на вопросы по шагам. На каждом этапе можно вернуться назад или остановить заполнение.</blockquote>\n\n"
             f"1. Ваш основной аккаунт {username}?",
@@ -53,7 +53,7 @@ def register_apply(dp, bot: Bot):
         )
         return await call.answer()
 
-    # --- ШАГ 1 (Отказ): Блокировка ---
+    # --- ШАГ 1 (Отказ) ---
     @dp.callback_query(F.data == "apply_q1_no")
     async def apply_q1_no(call: types.CallbackQuery):
         uid = call.from_user.id
@@ -79,7 +79,7 @@ def register_apply(dp, bot: Bot):
     # --- ШАГ 2: Опыт ---
     @dp.callback_query(F.data == "apply_q1_yes")
     async def apply_q1_yes(call: types.CallbackQuery, state: FSMContext):
-        await state.update_data(main_acc="Да") # Сохраняем ответ 1 шага
+        await state.update_data(main_acc="Да")
         await call.message.edit_text(
             "<b>2️⃣ Опыт в сфере обменов и оплат</b>\n\n"
             "Выберите вариант, который лучше всего описывает ваш текущий опыт.",
@@ -114,12 +114,11 @@ def register_apply(dp, bot: Bot):
         )
         return await call.answer()
 
-    # Возврат к банкам (для кнопки назад с 4 шага)
     @dp.callback_query(F.data == "apply_q3_back")
-    async def apply_q3_back(call: types.CallbackQuery):
-        await apply_q2_done(call, None) # Переиспользуем логику отрисовки шага 3
+    async def apply_q3_back(call: types.CallbackQuery, state: FSMContext):
+        await apply_q2_done(call, state) # Исправлено: передаем state
 
-    # --- ШАГ 4: Направления (Чекбоксы) ---
+    # --- ШАГ 4: Направления ---
     @dp.callback_query(F.data.startswith("apply_q3_"))
     async def apply_q3_done_select_dir(call: types.CallbackQuery, state: FSMContext):
         bank_value = "Сбер/Т-Банк" if "major" in call.data else "Другие"
@@ -145,7 +144,7 @@ def register_apply(dp, bot: Bot):
         buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
         
         await call.message.edit_text(
-            "<b>4️⃣ Направления работы</b>\n\nВыберите один или несколько вариантов, затем нажмите «➡️ Далее».",
+            "<b>4️⃣ Направления работы</b>\n\nВыберите варианты и нажмите «➡️ Далее».",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
 
@@ -160,13 +159,7 @@ def register_apply(dp, bot: Bot):
         await show_q4(call, selected)
         return await call.answer()
 
-    @dp.callback_query(F.data == "apply_q4_back")
-    async def apply_q4_back(call: types.CallbackQuery, state: FSMContext):
-        data = await state.get_data()
-        await show_q4(call, data.get("directions", []))
-        return await call.answer()
-
-    # --- ШАГ 5: Чаты (Чекбоксы) ---
+    # --- ШАГ 5: Чаты ---
     @dp.callback_query(F.data == "apply_q4_next")
     async def apply_q4_next(call: types.CallbackQuery, state: FSMContext):
         data = await state.get_data()
@@ -190,7 +183,7 @@ def register_apply(dp, bot: Bot):
         buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
         
         await call.message.edit_text(
-            "<b>5️⃣ Активные рабочие чаты</b>\n\nВыберите чаты, в которых вы состоите.",
+            "<b>5️⃣ Активные рабочие чаты</b>\n\nВыберите чаты, в которых состояли.",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
 
@@ -205,16 +198,16 @@ def register_apply(dp, bot: Bot):
         await show_q5(call, selected)
         return await call.answer()
 
-    # --- ШАГ 6: Дополнительная информация (ТВОЙ ЗАПРОС) ---
+    # --- ШАГ 6: Доп. информация ---
     @dp.callback_query(F.data == "apply_q5_next")
     async def apply_q6_start(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(WorkerRegStates.waiting_for_extra_info)
         text = (
-            "<b>6. Дополнительная информация</b>\n"
-            "<blockquote>Напишите всё, что может помочь при рассмотрении анкеты.</blockquote>"
+            "<b>6️⃣ Дополнительная информация</b>\n\n"
+            "<blockquote>Напишите всё, что поможет при рассмотрении анкеты (опыт, другие чаты, график).</blockquote>"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q6_back")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q4_next")],
             [InlineKeyboardButton(text="🛑 Отмена", callback_data="client_back_menu")]
         ])
         try:
@@ -224,19 +217,50 @@ def register_apply(dp, bot: Bot):
         await bot.send_message(call.message.chat.id, text, parse_mode="HTML", reply_markup=kb)
         return await call.answer()
 
+    # --- ФИНАЛЬНЫЙ ПРЕДПРОСМОТР ---
     @dp.message(WorkerRegStates.waiting_for_extra_info)
     async def apply_q6_text_handler(message: types.Message, state: FSMContext):
         await state.update_data(extra_info=message.text)
-        await message.answer(
-            "✅ <b>Информация сохранена!</b>\n\n"
-            "Всё готово для финальной проверки анкеты.",
+        data = await state.get_data()
+        
+        # Маппинг для красивого вывода
+        dirs_map = {
+            "dir_card": "Карта", "dir_sbp": "СБП", "dir_transfer": "Перевод", 
+            "dir_phone": "Телефон", "dir_qr": "QR"
+        }
+        chats_map = {
+            "chat_bsg": "BSG", "chat_frk": "FRK", "chat_old": "OLD", 
+            "chat_jess": "JESS", "chat_vera": "VERA", "chat_other": "Другой"
+        }
+        
+        sel_dirs = ", ".join([dirs_map.get(d, d) for d in data.get("directions", [])])
+        sel_chats = ", ".join([chats_map.get(c, c) for c in data.get("chats", [])])
+        
+        report = (
+            "📋 <b>Предпросмотр анкеты</b>\n\n"
+            f"👤 <b>Аккаунт:</b> {'Да'}\n"
+            f"📊 <b>Опыт:</b> {data.get('experience')}\n"
+            f"🏦 <b>Банки:</b> {data.get('bank')}\n"
+            f"🛠 <b>Направления:</b> {sel_dirs}\n"
+            f"💬 <b>Чаты:</b> {sel_chats}\n"
+            f"📝 <b>Доп. инфо:</b> <i>{data.get('extra_info')}</i>\n\n"
+            "<blockquote>Проверьте данные. Если всё верно — отправляйте анкету.</blockquote>"
+        )
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Отправить анкету", callback_data="apply_final_confirm")],
+            [InlineKeyboardButton(text="🔄 Заполнить заново", callback_data="worker_apply")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="client_back_menu")]
+        ])
+        
+        await message.answer(report, parse_mode="HTML", reply_markup=kb)
+
+    @dp.callback_query(F.data == "apply_final_confirm")
+    async def apply_final_confirm(call: types.CallbackQuery, state: FSMContext):
+        await call.message.edit_text(
+            "✅ <b>Заявка отправлена!</b>\n\nОжидайте решения администрации. Вам придет уведомление.",
             parse_mode="HTML"
         )
-
-    @dp.callback_query(F.data == "apply_q6_back")
-    async def apply_q6_back(call: types.CallbackQuery, state: FSMContext):
-        await state.set_state(None)
-        data = await state.get_data()
-        await show_q5(call, data.get("chats", []))
+        # Здесь позже добавишь код отправки ADMIN_ID
+        await state.clear()
         return await call.answer()
- 
