@@ -9,6 +9,9 @@ from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import WorkerRegStates
 
+# Юзернейм поддержки без знака @
+SUPPORT_USERNAME = "usudhsuhd"
+
 CLIENT_MENU_TEXT = (
     "🏠 Главное меню клиента\n\n"
     "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
@@ -34,7 +37,8 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
         InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
         InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
     ],
-    [InlineKeyboardButton(text="🆘 Поддержка", callback_data="client_support")]
+    # Кнопка перенаправляет сразу в диалог поддержки
+    [InlineKeyboardButton(text="🆘 Поддержка", url=f"https://t.me/{SUPPORT_USERNAME}")]
 ])
 
 
@@ -145,21 +149,20 @@ def register_client(dp, bot):
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
 
-    # --- ИСПРАВЛЕННЫЙ И ОПТИМИЗИРОВАННЫЙ ХЕНДЛЕР ЛК И КЛИЕНТСКИХ КНОПОК ---
     @dp.callback_query(
         (
-            F.data.startswith("lk_") | 
-            F.data.startswith("client_") | 
-            F.data.startswith("cards_") | 
-            F.data.startswith("card_") | 
-            F.data.startswith("history_") | 
-            F.data.startswith("worker_history_") | 
+            F.data.startswith("lk_") |
+            F.data.startswith("client_") |
+            F.data.startswith("cards_") |
+            F.data.startswith("card_") |
+            F.data.startswith("history_") |
+            F.data.startswith("worker_history_") |
             (F.data == "worker_apply")
         )
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
-        & ~F.data.in_({"card_unique_yes", "card_unique_no"})
+        & ~F.data.in_({"card_unique_yes", "card_unique_no", "client_support"})
     )
     async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
         uid = call.from_user.id
@@ -225,21 +228,12 @@ def register_client(dp, bot):
             await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
 
-        # ОБРАБОТКА КНОПОК ДЛЯ ПРОФИЛЯ (Чтобы не улетали в "Раздел в разработке")
         if call.data == "client_ref":
-            # Можешь заменить логику генерации рефки на свою
             ref_link = f"https://t.me/{(await bot.get_me()).username}?start={uid}"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="◀️ Назад в профиль", callback_data="client_profile")]
             ])
             await bot.send_message(chat_id, f"🔗 <b>Ваша реферальная ссылка:</b>\n<code>{ref_link}</code>", parse_mode="HTML", reply_markup=keyboard)
-            return await call.answer()
-
-        if call.data == "client_support":
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
-            ])
-            await bot.send_message(chat_id, "🆘 <b>Поддержка сервиса</b>\n\nПо всем вопросам обращайтесь к администратору: @usudhsuhd", parse_mode="HTML", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "lk_cards":
@@ -453,7 +447,7 @@ def register_client(dp, bot):
                 status_text = "✅ Завершена"
             elif status == "IN_PROGRESS":
                 status_text = "🟢 В работе"
-            elif status == "CANCELLED": 
+            elif status == "CANCELLED":
                 status_text = "❌ Отменена"
             else:
                 status_text = "🟡 Новая"
@@ -473,5 +467,4 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
-        # Если дошли сюда и callback_data подошел под фильтр, но условий нет
         await call.answer("🚧 Раздел в разработке", show_alert=True)
