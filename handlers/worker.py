@@ -84,7 +84,48 @@ def register_worker(dp, bot):
         ])
         await message.answer_photo(photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
 
-    @dp.callback_query(F.data.startswith("take_"))
+    @dp.callback_query(F.data == "lk_active")
+    async def lk_active(call: types.CallbackQuery):
+        uid = call.from_user.id
+        orders = await db.db_fetchall(
+            "SELECT id, amount, status FROM orders WHERE status='NEW' ORDER BY id DESC LIMIT 20"
+        )
+        try:
+            await call.message.delete()
+        except:
+            pass
+
+        if not orders:
+            await call.message.answer(
+                "📭 <b>Активных заявок пока нет</b>\n\nОжидайте новых!",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+                ])
+            )
+            return await call.answer()
+
+        buttons = []
+        for order in orders:
+            buttons.append([InlineKeyboardButton(
+                text=f"💳 #{order['id']} — {float(order['amount']):.0f} RUB • Карта под оплату",
+                callback_data=f"take_{order['id']}"
+            )])
+        buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
+
+        await call.message.answer_photo(
+            photo="AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ",
+            caption=(
+                "<b>📥 Доступные заявки</b>\n\n"
+                "<blockquote>Здесь отображаются все активные заявки от клиентов, которые ещё не взяты в работу.\n"
+                "Нажмите на заявку, чтобы просмотреть детали и взять её.</blockquote>"
+            ),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+        await call.answer()
+
+    @dp.callback_query(F.data == "lk_home")
     async def take(call: types.CallbackQuery):
         uid = call.from_user.id
         if get_role(uid) not in ["worker", "admin"]:
