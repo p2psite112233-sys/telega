@@ -20,18 +20,9 @@ class ClientStates(StatesGroup):
     waiting_for_order_amount = State()
 
 class WorkerRegStates(StatesGroup):
-    # Управление картами
     waiting_for_card_data = State()
     waiting_for_bank_name = State()
-    
-    # Анкета регистрации воркера (Шаги 1-7)
-    waiting_for_main_acc = State()    # Шаг 2
-    waiting_for_experience = State()  # Шаг 3
-    waiting_for_directions = State()  # Шаг 4
-    waiting_for_chats = State()       # Шаг 5
-    waiting_for_work_hours = State()  # Шаг 6
-    waiting_for_extra_info = State()  # Шаг 7 (Текстовый ввод)
-    
+    waiting_for_experience = State()
     waiting_for_next_step = State()
 
 # --- КЛАВИАТУРЫ ---
@@ -71,6 +62,12 @@ def register_common(dp, bot: Bot):
         await state.clear()
         uid = message.from_user.id
         role = get_role(uid)
+
+        # Регистрируем юзера в БД при первом старте
+        await db.db_execute(
+            "INSERT INTO balances (user_id, balance, frozen) VALUES ($1, 0, 0) ON CONFLICT DO NOTHING",
+            uid
+        )
 
         if role in ["worker", "admin"]:
             return await message.answer(f"🛠 Режим: {role.upper()}", reply_markup=menu)
@@ -117,7 +114,7 @@ def register_common(dp, bot: Bot):
         await call.answer()
 
     @dp.message(ClientStates.waiting_for_topup_amount)
-    async def process_topup_amount(message: types.Message, state: FSMContext, bot: Bot):
+    async def process_topup_amount(message: types.Message, state: FSMContext):
         try:
             amount_rub = float(message.text.strip())
             if amount_rub < 100:
@@ -198,7 +195,7 @@ def register_common(dp, bot: Bot):
         await call.answer()
 
     @dp.message(ClientStates.waiting_for_order_amount)
-    async def process_order_amount(message: types.Message, state: FSMContext, bot: Bot):
+    async def process_order_amount(message: types.Message, state: FSMContext):
         try:
             rub = float(message.text.strip())
             if rub <= 0:
@@ -231,7 +228,7 @@ def register_common(dp, bot: Bot):
 
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
-        amount_usdt = round(rub / rate, 4)
+        amount_usdt = round(rub / rate, 4)  # Чистая сумма без комиссии
 
         if not await db.freeze_balance(uid, total_usdt):
             balance = await db.get_balance(uid)
