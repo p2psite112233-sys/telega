@@ -238,7 +238,6 @@ def register_common(dp, bot: Bot):
         order_id = row["id"]
 
         unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
-        unique_label = "⭐️ УНИКАЛЬНАЯ" if unique else "обычная"
 
         client_msg = await message.answer(
             f"🎉 Заявка принята в обработку\n\n"
@@ -258,10 +257,11 @@ def register_common(dp, bot: Bot):
 
         text_order = (
             f"📥 <b>Новая заявка #{order_id}</b>\n\n"
-            f"💳 Метод: Карта под оплату ({unique_label})\n"
-            f"💰 Сумма: {rub:.2f} RUB\n"
-            f"💎 Итог: {total:.2f} RUB\n"
-            f"🔐 Резерв: {total_usdt:.4f} USDT\n\n"
+            f"💳 <b>Услуга:</b> Карта под оплату\n"
+            f"🃏 {unique_text}\n\n"
+            f"💰 <b>Сумма перевода:</b> {rub:.2f} RUB\n"
+            f"💎 <b>Клиент оплатит:</b> {total:.2f} RUB\n\n"
+            f"🔐 <b>Резерв:</b> {total_usdt:.4f} USDT\n"
             f"⏱ Время на принятие: 1500 сек"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
