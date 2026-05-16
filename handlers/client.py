@@ -147,7 +147,7 @@ def register_client(dp, bot):
             logger.error(f"[client_paid] send_message error: {e}")
 
     @dp.callback_query(
-        (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_") | F.data.startswith("worker_history_"))
+        (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_") | F.data.startswith("worker_history_") | F.data == "worker_apply")
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
@@ -195,9 +195,13 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        if call.data == "worker_apply":
+            await call.answer("🚧 Раздел в разработке", show_alert=True)
+            return
+
         if call.data == "client_become_worker":
             await call.message.answer(
-                "<b>📝 Заявка на роль исполнителя</b>\n\n"
+                "<b>📝 Заявка на роль исполнителя</b>\n"
                 "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
                 "Все ответы отправятся одной заявкой на рассмотрение администрации после финальной проверки.</blockquote>\n"
                 "Что важно:\n"
