@@ -82,6 +82,7 @@ def register_common(dp, bot: Bot):
             "🔳 QR-оплата: скидка по комиссии <b>-8%</b>\n"
             "⚡️ Работаем <b>24/7</b>"
         )
+        balance = await db.get_balance(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
@@ -93,7 +94,7 @@ def register_common(dp, bot: Bot):
             ],
             [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
             [
-                InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
+                InlineKeyboardButton(text=f"🙋‍♂️ Профиль • {balance:.2f} USDT", callback_data="client_profile"),
                 InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
             ],
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
@@ -370,4 +371,3 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
             except:
                 pass
             return
- 
