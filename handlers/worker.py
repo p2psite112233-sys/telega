@@ -205,16 +205,6 @@ def register_worker(dp, bot):
             logger.error(f"[req_card] delete error: {e}")
 
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
-        try:
-            w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
-            if w_row and w_row["worker_message_id"]:
-                await bot.delete_message(chat_id=uid, message_id=w_row["worker_message_id"])
-        except:
-            pass
-        try:
-            await call.message.delete()
-        except:
-            pass
         total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
         worker_msg = await call.message.answer(
             f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
@@ -222,7 +212,24 @@ def register_worker(dp, bot):
             f"⏳ Ожидаем запрос кода от клиента",
             parse_mode="HTML"
         )
+        # Сохраняем новый message_id и удаляем старое
+        old_worker_msg_id = None
+        try:
+            w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
+            if w_row:
+                old_worker_msg_id = w_row["worker_message_id"]
+        except:
+            pass
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
+        if old_worker_msg_id:
+            try:
+                await bot.delete_message(chat_id=uid, message_id=old_worker_msg_id)
+            except:
+                pass
+        try:
+            await call.message.delete()
+        except:
+            pass
 
     @dp.callback_query(F.data.startswith("request_code_"))
     async def request_code(call: types.CallbackQuery):
@@ -359,14 +366,26 @@ def register_worker(dp, bot):
         except Exception as e:
             logger.error(f"[worker_confirm] delete error: {e}")
 
-        try:
-            await call.message.delete()
-        except:
-            pass
         worker_msg = await call.message.answer(
             f"⏳ Ожидаем подтверждения от клиента\n\n"
             f"{order_info(order_id, float(order['amount']), total_usdt)}",
             parse_mode="HTML"
         )
+        old_worker_msg_id = None
+        try:
+            w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
+            if w_row:
+                old_worker_msg_id = w_row["worker_message_id"]
+        except:
+            pass
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
+        if old_worker_msg_id:
+            try:
+                await bot.delete_message(chat_id=uid, message_id=old_worker_msg_id)
+            except:
+                pass
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.answer()
