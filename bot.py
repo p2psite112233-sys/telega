@@ -20,10 +20,10 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# Принудительный сброс буфера для красивых логов в Render/Docker
+# Принудительный сброс буфера для красивых логов в Render
 sys.stdout.reconfigure(line_buffering=True)
 
-# Настройка логирования
+# Настройка красивого вывода логов в консоль
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -34,30 +34,25 @@ logger = logging.getLogger(__name__)
 logger.info("==> Starting bot initialization...")
 
 from config import BOT_TOKEN
-from db import init_db, close_db  # Предполагается, что в db.py есть закрытие пула
+from db import init_db
 from handlers.common import register_common, load_workers
 from handlers.client import register_client
 from handlers.worker import register_worker
 from handlers.admin import register_admin
 from handlers.apply import register_apply
 
-# Инициализация бота с дефолтным HTML-парсингом
+# Инициализация бота с дефолтным HTML-парсингом (теперь parse_mode внутри функций можно не писать)
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 # =====================================================================
-# РЕГИСТРАЦИЯ ХЭНДЛЕРОВ (ПОРЯДОК КРИТИЧЕСКИ ВАЖЕН!)
+# РЕГИСТРАЦИЯ ХЭНДЛЕРОВ (ПОРЯДОК ИДЕАЛЕН ДЛЯ КОНВЕЙЕРА AIOGRAM)
 # =====================================================================
-# 1. Сначала общие команды (/start, /cancel)
-register_common(dp, bot)
-# 2. Затем анкета "Стать исполнителем"
-register_apply(dp, bot)
-# 3. Затем личный кабинет и логика клиента
-register_client(dp, bot)
-# 4. Профиль и заявки воркера
-register_worker(dp, bot)
-# 5. Админ-панель (замыкающая)
-register_admin(dp, bot)
+register_common(dp, bot)  # 1. Сначала база, отмена и команда /start
+register_client(dp, bot)  # 2. Логика клиента (меню, заявки, профиль)
+register_apply(dp, bot)   # 3. Анкета "Стать исполнителем"
+register_worker(dp, bot)  # 4. Профиль воркера и прием заказов
+register_admin(dp, bot)   # 5. Админка (всегда в самом низу)
 
 
 # =====================================================================
@@ -77,7 +72,7 @@ async def run_web():
     logger.info(f"Web server started on port {port}")
 
 async def keep_alive():
-    """Самопинг раз в 10 минут, чтобы Render не усыплял бесплатный контейнер"""
+    """Самопинг раз в 10 минут, чтобы Render не усыплял бота"""
     while True:
         try:
             await asyncio.sleep(600)
@@ -92,29 +87,25 @@ async def keep_alive():
 
 
 # =====================================================================
-# ГЛАВНЫЙ СТАРТ И КОРРЕКТНОЕ ЗАКРЫТИЕ (GRACEFUL SHUTDOWN)
+# ГЛАВНЫЙ ЗАПУСК СЕССИИ
 # =====================================================================
 async def main():
-    # Инициализация ресурсов
+    # Инициализируем ресурсы проекта
     await init_db()
     await load_workers()
     
-    # Фоновые задачи
+    # Запускаем фоновые процессы веб-сервера
     asyncio.create_task(keep_alive())
     await run_web()
     
     logger.info("Bot is polling now...")
     try:
-        # Запуск лонг-поллинга
+        # Запуск лонг-поллинга Telegram
         await dp.start_polling(bot)
     finally:
-        # Корректное закрытие сессий при остановке проекта
-        logger.info("Shutting down... Closing active sessions.")
+        # Плавное отключение сессии бота, если Render перезагружает контейнер
+        logger.info("Shutting down... Closing bot session.")
         await bot.session.close()
-        try:
-            await close_db()
-        except NameError:
-            pass
         logger.info("Shutdown complete.")
 
 if __name__ == "__main__":
