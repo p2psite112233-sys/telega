@@ -147,7 +147,7 @@ def register_client(dp, bot):
             logger.error(f"[client_paid] send_message error: {e}")
 
     @dp.callback_query(
-        (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_"))
+        (F.data.startswith("lk_") | F.data.startswith("client_") | F.data.startswith("cards_") | F.data.startswith("card_") | F.data.startswith("history_") | F.data.startswith("worker_history_"))
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
@@ -313,7 +313,58 @@ def register_client(dp, bot):
                 )
             return await call.answer()
 
-        if call.data == "client_history":
+        if call.data == "lk_history":
+            done_orders = await db.db_fetchall(
+                "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('DONE', 'CANCELLED') ORDER BY id DESC LIMIT 20",
+                uid
+            )
+            if not done_orders:
+                await call.message.answer("📚 История заявок пуста")
+                return await call.answer()
+            buttons = []
+            for order in done_orders:
+                total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
+                icon = "✅" if order["status"] == "DONE" else "❌"
+                buttons.append([InlineKeyboardButton(
+                    text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.2f} USDT",
+                    callback_data=f"worker_history_order_{order['id']}"
+                )])
+            buttons.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+            await call.message.answer_photo(
+                photo=PROFILE_BANNER_FILE_ID,
+                caption=(
+                    "<b>📚 История воркера</b>\n\n"
+                    "<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>"
+                ),
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            return await call.answer()
+
+        if call.data.startswith("worker_history_order_"):
+            order_id = int(call.data.split("_")[3])
+            row = await db.db_fetchone(
+                "SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND worker_id=$2",
+                order_id, uid
+            )
+            if not row:
+                return await call.answer("❌ Заявка не найдена", show_alert=True)
+            total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
+            status_text = "✅ Завершена" if row["status"] == "DONE" else "❌ Отменена"
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]
+            ])
+            await call.message.answer(
+                f"<b>📋 Заявка #{row['id']}</b>\n\n"
+                f"💳 Услуга: Карта под оплату\n"
+                f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
+                f"💎 Зачислено: {total_usdt:.2f} USDT\n"
+                f"📊 Статус: {status_text}",
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
+            return await call.answer()
             active_orders = await db.db_fetchall(
                 "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC",
                 uid
