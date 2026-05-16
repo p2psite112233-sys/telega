@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 import db
-from config import ADMIN_ID, BANNER_FILE_ID, CARD_BANNER_FILE_ID
+from config import ADMIN_ID, BANNER_FILE_ID, CARD_BANNER_FILE_ID, ORDER_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate, crypto_create_invoice, crypto_check_invoice
 from utils.cards import parse_card
 from utils.shared import get_role, set_role, workers
@@ -82,7 +82,6 @@ def register_common(dp, bot: Bot):
             "🔳 QR-оплата: скидка по комиссии <b>-8%</b>\n"
             "⚡️ Работаем <b>24/7</b>"
         )
-        balance = await db.get_balance(uid)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
@@ -93,8 +92,10 @@ def register_common(dp, bot: Bot):
                 InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
             ],
             [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
-            [InlineKeyboardButton(text=f"🙋‍♂️ Профиль • {balance:.2f} USDT", callback_data="client_profile")],
-            [InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")],
+            [
+                InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
+                InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
+            ],
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
         ])
         await message.answer_photo(photo=BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
@@ -183,11 +184,14 @@ def register_common(dp, bot: Bot):
             await call.message.delete()
         except:
             pass
-        msg = await call.message.answer(
-            f"<b>💳 Карта под оплату</b>\n\n"
-            f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
-            f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
-            f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>",
+        msg = await call.message.answer_photo(
+            photo=ORDER_BANNER_FILE_ID,
+            caption=(
+                f"<b>💳 Карта под оплату</b>\n\n"
+                f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
+                f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
+                f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
+            ),
             parse_mode="HTML"
         )
         await state.update_data(unique=unique, sum_msg_id=msg.message_id)
