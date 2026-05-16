@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 import db
+from config import ADMIN_ID  # Добавили импорт ID админа
 from handlers.common import WorkerRegStates
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ def register_apply(dp, bot: Bot):
     # --- ШАГ 1: Старт анкеты ---
     @dp.callback_query(F.data == "worker_apply")
     async def worker_apply_start(call: types.CallbackQuery, state: FSMContext):
-        await state.clear() # Очищаем стейт при новом начале
+        await state.clear() 
         uid = call.from_user.id
         
         try:
@@ -116,7 +117,7 @@ def register_apply(dp, bot: Bot):
 
     @dp.callback_query(F.data == "apply_q3_back")
     async def apply_q3_back(call: types.CallbackQuery, state: FSMContext):
-        await apply_q2_done(call, state) # Исправлено: передаем state
+        await apply_q2_done(call, state)
 
     # --- ШАГ 4: Направления ---
     @dp.callback_query(F.data.startswith("apply_q3_"))
@@ -223,22 +224,15 @@ def register_apply(dp, bot: Bot):
         await state.update_data(extra_info=message.text)
         data = await state.get_data()
         
-        # Маппинг для красивого вывода
-        dirs_map = {
-            "dir_card": "Карта", "dir_sbp": "СБП", "dir_transfer": "Перевод", 
-            "dir_phone": "Телефон", "dir_qr": "QR"
-        }
-        chats_map = {
-            "chat_bsg": "BSG", "chat_frk": "FRK", "chat_old": "OLD", 
-            "chat_jess": "JESS", "chat_vera": "VERA", "chat_other": "Другой"
-        }
+        dirs_map = {"dir_card": "Карта", "dir_sbp": "СБП", "dir_transfer": "Перевод", "dir_phone": "Телефон", "dir_qr": "QR"}
+        chats_map = {"chat_bsg": "BSG", "chat_frk": "FRK", "chat_old": "OLD", "chat_jess": "JESS", "chat_vera": "VERA", "chat_other": "Другой"}
         
         sel_dirs = ", ".join([dirs_map.get(d, d) for d in data.get("directions", [])])
         sel_chats = ", ".join([chats_map.get(c, c) for c in data.get("chats", [])])
         
         report = (
             "📋 <b>Предпросмотр анкеты</b>\n\n"
-            f"👤 <b>Аккаунт:</b> {'Да'}\n"
+            f"👤 <b>Аккаунт:</b> Да\n"
             f"📊 <b>Опыт:</b> {data.get('experience')}\n"
             f"🏦 <b>Банки:</b> {data.get('bank')}\n"
             f"🛠 <b>Направления:</b> {sel_dirs}\n"
@@ -252,15 +246,47 @@ def register_apply(dp, bot: Bot):
             [InlineKeyboardButton(text="🔄 Заполнить заново", callback_data="worker_apply")],
             [InlineKeyboardButton(text="❌ Отмена", callback_data="client_back_menu")]
         ])
-        
         await message.answer(report, parse_mode="HTML", reply_markup=kb)
 
+    # --- ФИНАЛЬНАЯ ОТПРАВКА АДМИНУ ---
     @dp.callback_query(F.data == "apply_final_confirm")
-    async def apply_final_confirm(call: types.CallbackQuery, state: FSMContext):
+    async def apply_final_confirm(call: types.CallbackQuery, state: FSMContext, bot: Bot):
+        data = await state.get_data()
+        uid = call.from_user.id
+        username = f"@{call.from_user.username}" if call.from_user.username else "скрыт"
+        
+        # Перевод данных для админа
+        dirs_map = {"dir_card": "Карта", "dir_sbp": "СБП", "dir_transfer": "Перевод", "dir_phone": "Телефон", "dir_qr": "QR"}
+        chats_map = {"chat_bsg": "BSG", "chat_frk": "FRK", "chat_old": "OLD", "chat_jess": "JESS", "chat_vera": "VERA", "chat_other": "Другой"}
+        sel_dirs = ", ".join([dirs_map.get(d, d) for d in data.get("directions", [])])
+        sel_chats = ", ".join([chats_map.get(c, c) for c in data.get("chats", [])])
+
+        admin_text = (
+            "📩 <b>НОВАЯ ЗАЯВКА ВОРКЕРА</b>\n\n"
+            f"👤 <b>Юзер:</b> {username} (<code>{uid}</code>)\n"
+            f"📊 <b>Опыт:</b> {data.get('experience')}\n"
+            f"🏦 <b>Банки:</b> {data.get('bank')}\n"
+            f"🛠 <b>Направления:</b> {sel_dirs}\n"
+            f"💬 <b>Чаты:</b> {sel_chats}\n"
+            f"📝 <b>Доп:</b> {data.get('extra_info')}"
+        )
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Принять", callback_data=f"adm_ap_yes_{uid}"),
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"adm_ap_no_{uid}")
+            ]
+        ])
+
+        # САМА ОТПРАВКА
+        try:
+            await bot.send_message(ADMIN_ID, admin_text, reply_markup=kb, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"Error sending apply to admin: {e}")
+
         await call.message.edit_text(
             "✅ <b>Заявка отправлена!</b>\n\nОжидайте решения администрации. Вам придет уведомление.",
             parse_mode="HTML"
         )
-        # Здесь позже добавишь код отправки ADMIN_ID
         await state.clear()
         return await call.answer()
