@@ -1,3 +1,7 @@
+"""
+Точка входа. Порядок регистрации хендлеров изменен для корректной работы админки.
+"""
+
 import asyncio
 import logging
 import os
@@ -8,7 +12,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# Настройка логирования
+# Настройка вывода логов
+sys.stdout.reconfigure(line_buffering=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -24,40 +29,25 @@ from handlers.worker import register_worker
 from handlers.admin import register_admin
 from handlers.apply import register_apply
 
-async def main():
-    # 1. Инициализация бота и диспетчера
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher()
+# Инициализация бота
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+dp = Dispatcher()
 
-    # 2. Инициализация ресурсов
-    await init_db()
-    await load_workers()
+# =====================================================================
+# РЕГИСТРАЦИЯ ХЭНДЛЕРОВ (ПРИОРИТЕТ: АДМИН -> ОСТАЛЬНЫЕ)
+# =====================================================================
+# Админка ПЕРВОЙ, чтобы её кнопки (stats, бан и т.д.) не перехватывались клиентом
+register_admin(dp, bot)  
+register_common(dp, bot)
+register_apply(dp, bot)
+register_worker(dp, bot)
+register_client(dp, bot)
 
-    # 3. РЕГИСТРАЦИЯ ХЕНДЛЕРОВ (КРИТИЧЕСКИЙ ПОРЯДОК)
-    # Сначала админ, потом общие команды, потом всё остальное
-    register_admin(dp, bot)   # САМЫЙ ВЫСОКИЙ ПРИОРИТЕТ
-    register_common(dp, bot)  # Базовые команды (/start, /cancel)
-    register_apply(dp, bot)   # Анкеты (FSM)
-    register_worker(dp, bot)  # Личный кабинет воркера
-    register_client(dp, bot)  # Логика клиента (в самом низу)
-
-    # 4. Настройка Web-сервера для Render (Keep-alive)
-    asyncio.create_task(run_web())
-    asyncio.create_task(keep_alive())
-
-    logger.info("Бот запущен и готов к работе!")
-    
-    try:
-        # 5. Запуск пуллинга
-        # skip_updates=True полезно при дебаге, чтобы бот не отвечал на старые нажатия
-        await dp.start_polling(bot, skip_updates=True)
-    finally:
-        await bot.session.close()
-
-# --- Вспомогательные функции для Render ---
-
+# =====================================================================
+# WEB СЕРВЕР ДЛЯ RENDER
+# =====================================================================
 async def handle(request):
-    return web.Response(text="Bot is alive")
+    return web.Response(text="Bot is running")
 
 async def run_web():
     app = web.Application()
@@ -67,22 +57,48 @@ async def run_web():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
+    logger.info(f"Web server started on port {port}")
 
 async def keep_alive():
-    """Самопинг раз в 10 минут, чтобы Render не 'усыплял' бота"""
+    """Самопинг раз в 10 минут по твоему адресу на Render"""
     while True:
         try:
             await asyncio.sleep(600)
             async with aiohttp.ClientSession() as session:
-                # Замени URL на свой адрес на Render
-                async with session.get("https://твой-адрес.onrender.com/") as resp:
+                # Твой адрес подставлен сюда:
+                async with session.get(
+                    "https://telega-3gkk.onrender.com/",
+                    timeout=aiohttp.ClientTimeout(total=5)
+                ) as resp:
                     if resp.status == 200:
-                        logger.info("Keep-alive: OK")
+                        logger.info("Keep-alive ping: OK (200)")
+                    else:
+                        logger.warning(f"Keep-alive ping: Status {resp.status}")
         except Exception as e:
-            logger.error(f"Keep-alive error: {e}")
+            logger.warning(f"Keep-alive ping failed: {e}")
+
+# =====================================================================
+# ГЛАВНЫЙ ЗАПУСК
+# =====================================================================
+async def main():
+    # Инициализируем БД и список воркеров
+    await init_db()
+    await load_workers()
+    
+    # Запускаем фоновые задачи
+    asyncio.create_task(run_web())
+    asyncio.create_task(keep_alive())
+    
+    logger.info("Бот запущен. Начинаю опрос Telegram (Polling)...")
+    try:
+        # skip_updates=True игнорирует старые нажатия кнопок при перезапуске
+        await dp.start_polling(bot, skip_updates=True)
+    finally:
+        logger.info("Закрытие сессии бота...")
+        await bot.session.close()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Бот остановлен")
+        logger.info("Бот остановлен вручную.")
