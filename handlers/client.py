@@ -1,6 +1,6 @@
 import logging
 logger = logging.getLogger(__name__)
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -110,7 +110,6 @@ def register_client(dp, bot):
             order_id
         )
         
-        # Исправлено: Проверяем реальный статус, если апдейт не прошел
         if "UPDATE 0" in result:
             current_status = await db.db_fetchone("SELECT status FROM orders WHERE id=$1", order_id)
             if current_status and current_status["status"] == "CANCELLED":
@@ -168,7 +167,7 @@ def register_client(dp, bot):
             F.data.startswith("card_") |
             F.data.startswith("history_") |
             F.data.startswith("worker_history_") |
-            F.data.startswith("apply_q") |
+            F.data.startswith("apply_") |
             (F.data == "worker_apply")
         )
         & ~F.data.startswith("client_paid_")
@@ -180,14 +179,18 @@ def register_client(dp, bot):
         uid = call.from_user.id
         chat_id = call.message.chat.id
 
-        try:
-            await call.message.delete()
-        except:
-            pass
-
-        if call.data != "cards_add":
+        # Очищаем стейты, только если это НЕ переходы внутри анкеты и НЕ добавление карт
+        if call.data != "cards_add" and not call.data.startswith("apply_"):
             await state.clear()
 
+        # Для обычных кнопок удаляем старое сообщение (кроме шагов анкеты, где используется edit_text)
+        if not call.data.startswith("apply_") and call.data != "worker_apply":
+            try:
+                await call.message.delete()
+            except:
+                pass
+
+        # === АНКЕТА: СТАРТ / ВОПРОС 1 ===
         if call.data == "worker_apply":
             row = await db.db_fetchone(
                 "SELECT next_apply_at FROM worker_applications WHERE user_id=$1", uid
@@ -209,56 +212,97 @@ def register_client(dp, bot):
                     return await call.answer()
 
             username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
-            await call.bot.send_message(
-                chat_id,
+            
+            text_q1 = (
                 f"<b>📝 Заполнение анкеты исполнителя</b>\n\n"
                 f"<blockquote>Ответьте на вопросы по шагам. На каждом этапе можно вернуться назад или остановить заполнение.</blockquote>\n\n"
-                f"1️⃣ Ваш основной аккаунт — {username}?",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Да", callback_data="apply_q1_yes")],
-                    [InlineKeyboardButton(text="❌ Нет", callback_data="apply_q1_no")],
-                    [InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
-                ])
+                f"1️⃣ Ваш основной аккаунт — {username}?"
             )
+            markup_q1 = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Да", callback_data="apply_q1_yes")],
+                [InlineKeyboardButton(text="❌ Нет", callback_data="apply_q1_no")],
+                [InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
+            ])
+
+            # Если мы пришли сюда по кнопке "Назад", то редактируем. Если с нуля — шлем новое.
+            if call.message:
+                try:
+                    await call.message.edit_text(text_q1, parse_mode="HTML", reply_markup=markup_q1)
+                    return await call.answer()
+                except Exception:
+                    pass
+
+            await call.bot.send_message(chat_id, text_q1, parse_mode="HTML", reply_markup=markup_q1)
             return await call.answer()
 
+        # === АНКЕТА: ОТВЕТ "НЕТ" НА 1 ВОПРОС ===
         if call.data == "apply_q1_no":
             next_apply = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
-            
             await db.db_execute(
                 """INSERT INTO worker_applications (user_id, status, next_apply_at)
                    VALUES ($1, 'rejected', $2)
                    ON CONFLICT (user_id) DO UPDATE SET status='rejected', next_apply_at=$2""",
                 uid, next_apply
             )
-
             formatted = next_apply.strftime("%d.%m.%Y в %H:%M")
-            await call.bot.send_message(
-                chat_id,
-                f"❌ <b>Подача заявки отклонена</b>\n\n"
-                f"К сожалению, мы принимаем анкеты только с ваших основных рабочих аккаунтов Telegram.\n"
-                f"Пожалуйста, зайдите со своего главного профиля и повторите попытку.\n\n"
-                f"⏳ Следующая попытка подачи станет доступна: <b>{formatted}</b>.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🏠 Вернуться в меню", callback_data="client_back_menu")]
-                ])
-            )
+            try:
+                await call.message.edit_text(
+                    f"❌ <b>Подача заявки отклонена</b>\n\n"
+                    f"К сожалению, мы принимаем анкеты только с ваших основных рабочих аккаунтов Telegram.\n"
+                    f"Пожалуйста, зайдите со своего главного профиля и повторите попытку.\n\n"
+                    f"⏳ Следующая попытка подачи станет доступна: <b>{formatted}</b>.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🏠 Вернуться в меню", callback_data="client_back_menu")]
+                    ])
+                )
+            except Exception as e:
+                logger.error(f"[apply_q1_no] edit error: {e}")
             return await call.answer()
 
+        # === АНКЕТА: ОТВЕТ "ДА" -> ПЕРЕХОД К ШАГУ 2 ===
         if call.data == "apply_q1_yes":
-            await call.bot.send_message(
-                chat_id,
-                "🚧 <b>Следующий шаг анкеты находится в разработке</b>\n\n"
-                "Логика подтверждения основного аккаунта сейчас настраивается.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🏠 Вернуться в меню", callback_data="client_back_menu")]
-                ])
-            )
+            await state.set_state(WorkerRegStates.waiting_for_experience)
+            try:
+                await call.message.edit_text(
+                    "<b>2️⃣ Опыт в сфере обменов и оплат</b>\n\n"
+                    "Выберите вариант, который лучше всего описывает ваш текущий опыт.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="Менее 1 мес", callback_data="apply_q2_0")],
+                        [InlineKeyboardButton(text="1-2 мес", callback_data="apply_q2_1")],
+                        [InlineKeyboardButton(text="3-5 мес", callback_data="apply_q2_3")],
+                        [InlineKeyboardButton(text="Более 5+ мес", callback_data="apply_q2_5")],
+                        [InlineKeyboardButton(text="⏪ Назад", callback_data="worker_apply"),
+                         InlineKeyboardButton(text="❌ Отмена заявки", callback_data="client_back_menu")]
+                    ])
+                )
+            except Exception as e:
+                logger.error(f"[apply_q1_yes] edit error: {e}")
             return await call.answer()
 
+        # === АНКЕТА: ВЫБОР ВАРИАНТА ОПЫТА -> ПЕРЕХОД К ШАГУ 3 ===
+        if call.data.startswith("apply_q2_"):
+            exp_value = call.data.split("_")[2]
+            await state.update_data(experience=exp_value)
+            await state.set_state(WorkerRegStates.waiting_for_next_step)
+            try:
+                await call.message.edit_text(
+                    "<b>3️⃣ Следующий шаг анкеты</b>\n\n"
+                    "Какими банками (РФ) для работы вы располагаете чаще всего?",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="Сбербанк / Т-Банк", callback_data="apply_q3_major")],
+                        [InlineKeyboardButton(text="Другие / Райффайзен / Альфа", callback_data="apply_q3_other")],
+                        [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q1_yes"),
+                         InlineKeyboardButton(text="❌ Отмена", callback_data="client_back_menu")]
+                    ])
+                )
+            except Exception as e:
+                logger.error(f"[apply_q2] edit error: {e}")
+            return await call.answer()
+
+        # === ДРУГИЕ КНОПКИ МЕНЮ ===
         if call.data == "client_become_worker":
             await call.bot.send_message(
                 chat_id,
@@ -316,6 +360,13 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="◀️ Назад в профиль", callback_data="client_profile")]
             ])
             await call.bot.send_message(chat_id, f"🔗 <b>Ваша реферальная ссылка:</b>\n<code>{ref_link}</code>", parse_mode="HTML", reply_markup=keyboard)
+            return await call.answer()
+
+        if call.data == "client_support":
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+            ])
+            await call.bot.send_message(chat_id, "🆘 <b>Поддержка сервиса</b>\n\nПо всем вопросам обращайтесь к администратору: @usudhsuhd", parse_mode="HTML", reply_markup=keyboard)
             return await call.answer()
 
         if call.data == "lk_cards":
