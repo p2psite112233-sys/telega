@@ -1,13 +1,13 @@
 import logging
-logger = logging.getLogger(__name__)
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 import db
-from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
-from utils.crypto import crypto_get_rate
+from config import PROFILE_BANNER_FILE_ID
 from handlers.common import WorkerRegStates
+
+logger = logging.getLogger(__name__)
 
 CLIENT_MENU_TEXT = (
     "🏠 Главное меню клиента\n\n"
@@ -145,7 +145,7 @@ def register_client(dp, bot):
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
 
-    # --- ИСПРАВЛЕННЫЙ ДЕКОРАТОР ФИЛЬТРОВ ---
+    # ЧИСТЫЙ ЛК ДЕКОРАТОР (Без анкетных фильтров)
     @dp.callback_query(
         (
             F.data.startswith("lk_") |
@@ -153,9 +153,7 @@ def register_client(dp, bot):
             F.data.startswith("cards_") |
             F.data.startswith("card_") |
             F.data.startswith("history_") |
-            F.data.startswith("worker_history_") |
-            F.data.startswith("apply_q") |
-            (F.data == "worker_apply")
+            F.data.startswith("worker_history_")
         )
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
@@ -166,294 +164,10 @@ def register_client(dp, bot):
         uid = call.from_user.id
         chat_id = call.message.chat.id
 
-        # Удаляем старое сообщение только на невизуальных шагах, чтобы избежать мерцания
-        interactive_steps = ["apply_q3_", "apply_q4_", "apply_q5_", "apply_q3_back", "apply_q4_back", "apply_q4_next"]
-        if not any(call.data.startswith(p) for p in interactive_steps):
-            try:
-                await call.message.delete()
-            except:
-                pass
-
-        if call.data == "worker_apply":
-            from datetime import datetime, timezone
-            row = await db.db_fetchone(
-                "SELECT next_apply_at FROM worker_applications WHERE user_id=$1", uid
-            )
-            if row and row["next_apply_at"]:
-                next_apply = row["next_apply_at"]
-                now = datetime.now(timezone.utc)
-                if next_apply.replace(tzinfo=timezone.utc) > now:
-                    formatted = next_apply.strftime("%d %B %Y г., %H:%M")
-                    await bot.send_message(
-                        chat_id,
-                        f"⏳ <b>Повторная подача пока недоступна</b>\n\n"
-                        f"Повторную заявку можно подать после {formatted}.",
-                        parse_mode="HTML"
-                    )
-                    return await call.answer()
-
-            username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
-            await bot.send_message(
-                chat_id,
-                f"<b>📝 Заполнение анкеты исполнителя</b>\n\n"
-                f"<blockquote>Ответьте на вопросы по шагам. На каждом этапе можно вернуться назад или остановить заполнение.</blockquote>\n\n"
-                f"1. Ваш основной аккаунт {username}?",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Да", callback_data="apply_q1_yes")],
-                    [InlineKeyboardButton(text="❌ Нет", callback_data="apply_q1_no")],
-                    [InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
-                ])
-            )
-            return await call.answer()
-
-        if call.data == "apply_q1_no":
-            from datetime import datetime, timezone, timedelta
-            next_apply = datetime.now(timezone.utc) + timedelta(days=1)
-            await db.db_execute(
-                """INSERT INTO worker_applications (user_id, status, next_apply_at)
-                   VALUES ($1, 'rejected', $2)
-                   ON CONFLICT (user_id) DO UPDATE SET status='rejected', next_apply_at=$2""",
-                uid, next_apply
-            )
-            formatted = next_apply.strftime("%d %B %Y г., %H:%M")
-            await bot.send_message(
-                chat_id,
-                f"❌ <b>Заявка недоступна</b>\n\n"
-                f"Напишите нам с другого аккаунта.\n\n"
-                f"Повторную заявку можно подать после {formatted}.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
-                ])
-            )
-            return await call.answer()
-
-        if call.data == "apply_q1_yes":
-            await bot.send_message(
-                chat_id,
-                "<b>2️⃣ Опыт в сфере обменов и оплат</b>\n\n"
-                "Выберите вариант, который лучше всего описывает ваш текущий опыт.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="Менее 1 мес", callback_data="apply_q2_0")],
-                    [InlineKeyboardButton(text="1-2 мес", callback_data="apply_q2_1")],
-                    [InlineKeyboardButton(text="3-5 мес", callback_data="apply_q2_3")],
-                    [InlineKeyboardButton(text="Более 5+ мес", callback_data="apply_q2_5")],
-                    [InlineKeyboardButton(text="⏪ Назад", callback_data="worker_apply"),
-                     InlineKeyboardButton(text="❌ Отмена заявки", callback_data="client_back_menu")]
-                ])
-            )
-            return await call.answer()
-
-        if call.data.startswith("apply_q2_"):
-            try: await call.message.delete()
-            except: pass
-            await bot.send_message(
-                chat_id,
-                "<b>3️⃣ Банки для работы</b>\n\nКакими банками (РФ) вы располагаете чаще всего?",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="Сбербанк / Т-Банк", callback_data="apply_q3_major")],
-                    [InlineKeyboardButton(text="Другие / Райффайзен / Альфа", callback_data="apply_q3_other")],
-                    [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q1_yes"),
-                     InlineKeyboardButton(text="❌ Отмена", callback_data="client_back_menu")]
-                ])
-            )
-            return await call.answer()
-
-        # === ИСПРАВЛЕНО: ПЕРЕХОД К ВЫБОРУ НАПРАВЛЕНИЙ (ШАГ 4) ===
-        if call.data.startswith("apply_q3_") and call.data != "apply_q3_back":
-            bank_value = call.data.split("_")[2]
-            await state.update_data(bank=bank_value, directions=[])
-            
-            options = [
-                ("💳 Карта под оплату", "dir_card"),
-                ("📲 Переводы по СБП", "dir_sbp"),
-                ("🏦 Переводы по карте", "dir_transfer"),
-                ("📱 Пополнение номеров", "dir_phone"),
-                ("🔳 Оплата по QR-Коду", "dir_qr"),
-            ]
-            buttons = []
-            for label, k in options:
-                buttons.append([InlineKeyboardButton(text=label, callback_data=f"apply_q4_toggle_{k}")])
-            
-            buttons.append([
-                InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q3_back"),
-                InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")
-            ])
-
-            try:
-                await call.message.delete()
-            except: pass
-
-            await bot.send_message(
-                chat_id,
-                "<b>4️⃣ Направления работы</b>\n\n"
-                "Выберите один или несколько вариантов (появятся галочки), затем нажмите кнопку «➡️ Далее».",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-            )
-            return await call.answer()
-
-        if call.data == "apply_q3_back":
-            try:
-                await call.message.edit_text(
-                    "<b>3️⃣ Банки для работы</b>\n\nКакими банками (РФ) вы располагаете чаще всего?",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="Сбербанк / Т-Банк", callback_data="apply_q3_major")],
-                        [InlineKeyboardButton(text="Другие / Райффайзен / Альфа", callback_data="apply_q3_other")],
-                        [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q1_yes"),
-                         InlineKeyboardButton(text="❌ Отмена", callback_data="client_back_menu")]
-                    ])
-                )
-            except Exception as e:
-                logger.error(f"[apply_q3_back] edit error: {e}")
-            return await call.answer()
-
-        if call.data.startswith("apply_q4_toggle_"):
-            key = call.data.replace("apply_q4_toggle_", "")
-            data = await state.get_data()
-            selected = list(data.get("directions", []))
-            if key in selected:
-                selected.remove(key)
-            else:
-                selected.append(key)
-            await state.update_data(directions=selected)
-            options = [
-                ("💳 Карта под оплату", "dir_card"),
-                ("📲 Переводы по СБП", "dir_sbp"),
-                ("🏦 Переводы по карте", "dir_transfer"),
-                ("📱 Пополнение номеров", "dir_phone"),
-                ("🔳 Оплата по QR-Коду", "dir_qr"),
-            ]
-            buttons = []
-            for label, k in options:
-                prefix = "✅ " if k in selected else ""
-                buttons.append([InlineKeyboardButton(text=f"{prefix}{label}", callback_data=f"apply_q4_toggle_{k}")])
-            nav = [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q3_back")]
-            if selected:
-                nav.append(InlineKeyboardButton(text="➡️ Далее", callback_data="apply_q4_next"))
-            buttons.append(nav)
-            buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
-            try:
-                await call.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-            except Exception as e:
-                logger.error(f"[apply_q4_toggle] edit error: {e}")
-            return await call.answer()
-
-        # === ИСПРАВЛЕНО: ОТПРАВКА ШАГА 5 (ВЫБОР ЧАТОВ) ===
-        if call.data == "apply_q4_next":
-            data = await state.get_data()
-            selected_chats = list(data.get("chats", []))
-            options = [
-                ("BSG", "chat_bsg"), ("FRK", "chat_frk"), ("OLD", "chat_old"),
-                ("JESS", "chat_jess"), ("VERA", "chat_vera"), ("Другой чат", "chat_other")
-            ]
-            buttons = []
-            for label, k in options:
-                prefix = "✅ " if k in selected_chats else ""
-                buttons.append([InlineKeyboardButton(text=f"{prefix}{label}", callback_data=f"apply_q5_toggle_{k}")])
-            nav = [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q4_back")]
-            if selected_chats:
-                nav.append(InlineKeyboardButton(text="➡️ Далее", callback_data="apply_q5_next"))
-            buttons.append(nav)
-            buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
-            
-            try:
-                await call.message.edit_text(
-                    "<b>5️⃣ Активные рабочие чаты</b>\n\n"
-                    "Выберите чаты, в которых вы уже состоите или работали. После выбора появится кнопка перехода дальше.",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-                )
-            except:
-                await bot.send_message(
-                    chat_id,
-                    "<b>5️⃣ Активные рабочие чаты</b>\n\n"
-                    "Выберите чаты, в которых вы уже состоите или работали. После выбора появится кнопка перехода дальше.",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-                )
-            return await call.answer()
-
-        if call.data == "apply_q4_back":
-            data = await state.get_data()
-            selected = list(data.get("directions", []))
-            options = [
-                ("💳 Карта под оплату", "dir_card"),
-                ("📲 Переводы по СБП", "dir_sbp"),
-                ("🏦 Переводы по карте", "dir_transfer"),
-                ("📱 Пополнение номеров", "dir_phone"),
-                ("🔳 Оплата по QR-Коду", "dir_qr"),
-            ]
-            buttons = []
-            for label, k in options:
-                prefix = "✅ " if k in selected else ""
-                buttons.append([InlineKeyboardButton(text=f"{prefix}{label}", callback_data=f"apply_q4_toggle_{k}")])
-            nav = [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q3_back")]
-            if selected:
-                nav.append(InlineKeyboardButton(text="➡️ Далее", callback_data="apply_q4_next"))
-            buttons.append(nav)
-            buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
-            try:
-                await call.message.edit_text(
-                    "<b>4️⃣ Направления работы</b>\n\nМожно выбрать несколько вариантов.",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
-                )
-            except Exception as e:
-                logger.error(f"[apply_q4_back] edit error: {e}")
-            return await call.answer()
-
-        if call.data.startswith("apply_q5_toggle_"):
-            key = call.data.replace("apply_q5_toggle_", "")
-            data = await state.get_data()
-            selected = list(data.get("chats", []))
-            if key in selected:
-                selected.remove(key)
-            else:
-                selected.append(key)
-            await state.update_data(chats=selected)
-            options = [
-                ("BSG", "chat_bsg"), ("FRK", "chat_frk"), ("OLD", "chat_old"),
-                ("JESS", "chat_jess"), ("VERA", "chat_vera"), ("Другой чат", "chat_other")
-            ]
-            buttons = []
-            for label, k in options:
-                prefix = "✅ " if k in selected else ""
-                buttons.append([InlineKeyboardButton(text=f"{prefix}{label}", callback_data=f"apply_q5_toggle_{k}")])
-            nav = [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q4_back")]
-            if selected:
-                nav.append(InlineKeyboardButton(text="➡️ Далее", callback_data="apply_q5_next"))
-            buttons.append(nav)
-            buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
-            try:
-                await call.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
-            except Exception as e:
-                logger.error(f"[apply_q5_toggle] edit error: {e}")
-            return await call.answer()
-
-        if call.data == "apply_q5_next":
-            try:
-                await call.message.edit_text(
-                    "🚧 <b>Следующий шаг анкеты в разработке</b>",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
-                    ])
-                )
-            except:
-                await bot.send_message(
-                    chat_id,
-                    "🚧 <b>Следующий шаг анкеты в разработке</b>",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
-                    ])
-                )
-            return await call.answer()
+        try:
+            await call.message.delete()
+        except:
+            pass
 
         if call.data == "client_become_worker":
             await bot.send_message(
