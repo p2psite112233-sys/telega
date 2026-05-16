@@ -3,25 +3,20 @@ logger = logging.getLogger(__name__)
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
 
 import db
 from config import PROFILE_BANNER_FILE_ID, CARD_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import WorkerRegStates
 
-# Определяем состояния для клиента (если они объявлены в другом месте, можно убрать)
-class ClientStates(StatesGroup):
-    waiting_for_amount = State()
-
 CLIENT_MENU_TEXT = (
     "🏠 Главное меню клиента\n\n"
     "Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
     "пополнить номер телефона или оплатить готовый QR-код.\n"
     "Все этапы заявки фиксируются внутри сервиса.\n\n"
-    "💼 Комиссия сервиса: 20.00% от суммы заявки, но не меньше 30 RUB\n"
+    "💼 Комиссия сервиса: 20% от суммы заявки, но не меньше 30 RUB\n"
     "🆕 Уникальная карта: дополнительно +5%\n"
-    "🔳 QR-оплата: скидка по комиссии -8.00%\n"
+    "🔳 QR-оплата: скидка по комиссии -8%\n"
     "⚡️ Наши работники готовы обрабатывать заявки 24/7"
 )
 
@@ -31,7 +26,7 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
         InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
     ],
     [
-        InlineKeyboardButton(text="📳 Пополнить номер телефона через банк", callback_data="client_phone"),
+        InlineKeyboardButton(text="📳 Пополнить номер", callback_data="client_phone"),
         InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
     ],
     [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
@@ -45,92 +40,6 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
-    # --- ЭТАЛОННЫЙ ХЕНДЛЕР: ОБРАБОТКА ВВОДА СУММЫ И СОЗДАНИЕ ЗАЯВКИ С МИН. КОМИССИЕЙ 30 RUB ---
-    @dp.message(ClientStates.waiting_for_amount)
-    async def process_amount(message: types.Message, state: FSMContext):
-        try:
-            amount = float(message.text.strip())
-            if amount <= 0:
-                return await message.answer("❌ Сумма должна быть больше нуля. Введите сумму ещё раз:")
-        except ValueError:
-            return await message.answer("❌ Пожалуйста, введите корректное число:")
-
-        uid = message.from_user.id
-        data = await state.get_data()
-        
-        # Интеллектуальная проверка флага уникальной карты (поддерживает разные форматы записи в FSM)
-        is_unique = data.get("is_unique", False) or data.get("unique", False) or (data.get("card_type") == "unique")
-        
-        # Рассчитываем комиссию (20% обычная, 25% уникальная)
-        percent = 0.25 if is_unique else 0.20
-        dirty_profit_rub = amount * percent
-        
-        # ЖЕСТКАЯ ЗАЩИТА: Проверяем лимит минимальной комиссии в 30 RUB
-        is_min_commission = False
-        if dirty_profit_rub < 30.0:
-            dirty_profit_rub = 30.0
-            is_min_commission = True
-            
-        total_rub = round(amount + dirty_profit_rub, 2)  # Точная рублевая сумма к оплате для клиента
-
-        # Получаем актуальный курс крипты
-        try:
-            rate = await crypto_get_rate()
-            if rate <= 0:
-                rate = 95.0
-        except Exception as e:
-            logger.error(f"Ошибка получения курса: {e}")
-            rate = 95.0  # Резервный курс
-
-        total_usdt = round(total_rub / rate, 4)    # Сколько списывается/замораживается у клиента
-        amount_usdt = round(amount / rate, 4)      # Чистый эквивалент тела заявки в USDT
-
-        # Проверка баланса пользователя
-        balance = await db.get_balance(uid)
-        if balance < total_usdt:
-            return await message.answer(
-                f"❌ Недостаточно средств на балансе.\n"
-                f"Вам необходимо: <b>{total_usdt:.4f} USDT</b>\n"
-                f"Ваш баланс: <b>{balance:.2f} USDT</b>\n\n"
-                f"Пополните баланс или введите меньшую сумму:"
-            )
-
-        # Списываем баланс и отправляем в заморозку
-        await db.db_execute("UPDATE users SET balance = balance - $1, frozen = frozen + $1 WHERE id = $2", total_usdt, uid)
-        
-        # Исправлено: Добавлены поля в INSERT, чтобы данные об уникальности и суммах ложились ровно
-        order_row = await db.db_fetchone(
-            "INSERT INTO orders (user_id, amount, total_usdt, amount_usdt, status, is_unique) "
-            "VALUES ($1, $2, $3, $4, 'NEW', $5) RETURNING id",
-            uid, amount, total_usdt, amount_usdt, is_unique
-        )
-        order_id = order_row["id"]
-
-        min_commission_note = " ⚠️ (Включена мин. комиссия 30 RUB)" if is_min_commission else ""
-        unique_text = "✅ Уникальная карта" if is_unique else "❌ Обычная карта"
-
-        client_text = (
-            f"🎉 <b>Заявка принята в обработку</b>\n\n"
-            f"🆔 ID: #{order_id}\n"
-            f"💳 Услуга: Карта под оплату\n"
-            f"💰 Сумма: {amount:.2f} RUB\n"
-            f"💎 К оплате: {total_rub:.2f} RUB{min_commission_note}\n"
-            f"🃏 {unique_text}\n\n"
-            f"📊 Статус: 🟡 Новая\n"
-            f"👨‍💻 Исполнитель: назначается\n\n"
-            f"⏳ Ожидайте — скоро свяжемся с вами"
-        )
-
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
-        ])
-
-        msg = await message.answer(client_text, reply_markup=kb, parse_mode="HTML")
-        await db.db_execute("UPDATE orders SET client_message_id = $1 WHERE id = $2", msg.message_id, order_id)
-        
-        await state.clear()
-
-    # --- ОСТАЛЬНАЯ ЛОГИКА КЛИЕНТСКИХ И ЛК ФУНКЦИЙ ---
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
@@ -161,16 +70,13 @@ def register_client(dp, bot):
                 f"💰 Средства возвращены на баланс"
             )
         except Exception as e:
-            print(f"[cancel_order] edit error: {e}")
+            logger.error(f"[cancel_order] edit error: {e}")
 
         await call.answer("✅ Заявка отменена", show_alert=True)
 
         if worker_id:
             try:
-                await bot.send_message(
-                    worker_id,
-                    f"❌ Заявка #{order_id} была отменена клиентом"
-                )
+                await bot.send_message(worker_id, f"❌ Заявка #{order_id} была отменена клиентом")
             except:
                 pass
 
@@ -259,11 +165,11 @@ def register_client(dp, bot):
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
             frozen = await db.get_frozen(uid)
-            row = await db.get_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
             closed = row["count"] if row else 0
-            row = await db.get_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
+            row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
             active = row["count"] if row else 0
-            row = await db.get_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
+            row = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
             paid_count = row["count"] if row else 0
             text = (
                 f"<b>👤 Личный профиль</b>\n"
@@ -299,7 +205,6 @@ def register_client(dp, bot):
             for card in cards:
                 masked = f"{card['card_number'][:6]}{'*'*6}{card['card_number'][-4:]} · {card['expiry']}"
                 card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{card['id']}")])
-            card_buttons.append([InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")])
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
@@ -317,7 +222,6 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "lk_home":
-            from handlers.common import get_role
             username = f"@{call.from_user.username}" if call.from_user.username else "нет username"
             balance = await db.get_balance(uid)
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
@@ -339,8 +243,7 @@ def register_client(dp, bot):
                     InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
                     InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")
                 ],
-                [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
-                [InlineKeyboardButton(text="🏠 В меню", callback_data="lk_menu")]
+                [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")]
             ])
             await call.message.answer(text, reply_markup=keyboard)
             return await call.answer()
@@ -378,7 +281,6 @@ def register_client(dp, bot):
             for card in cards:
                 masked = f"{card['card_number'][:6]}{'*'*6}{card['card_number'][-4:]} · {card['expiry']}"
                 card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{card['id']}")])
-            card_buttons.append([InlineKeyboardButton(text="🔎 Поиск", callback_data="cards_search")])
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             keyboard = InlineKeyboardMarkup(inline_keyboard=card_buttons)
