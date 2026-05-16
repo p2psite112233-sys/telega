@@ -145,6 +145,7 @@ def register_client(dp, bot):
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
 
+    # --- ИСПРАВЛЕННЫЙ ДЕКОРАТОР ФИЛЬТРОВ ---
     @dp.callback_query(
         (
             F.data.startswith("lk_") |
@@ -159,14 +160,15 @@ def register_client(dp, bot):
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
-        & ~F.data.startswith("apply_q5_")
-        & ~F.data.in_({"card_unique_yes", "card_unique_no", "client_support", "apply_q4_next"})
+        & ~F.data.in_({"card_unique_yes", "card_unique_no", "client_support"})
     )
     async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
         uid = call.from_user.id
         chat_id = call.message.chat.id
 
-        if not call.data.startswith("apply_q4_toggle_") and not call.data.startswith("apply_q5_toggle_") and call.data != "apply_q4_back":
+        # Удаляем старое сообщение только на невизуальных шагах, чтобы избежать мерцания
+        interactive_steps = ["apply_q3_", "apply_q4_", "apply_q5_", "apply_q3_back", "apply_q4_back", "apply_q4_next"]
+        if not any(call.data.startswith(p) for p in interactive_steps):
             try:
                 await call.message.delete()
             except:
@@ -228,7 +230,7 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "apply_q1_yes":
-            await call.bot.send_message(
+            await bot.send_message(
                 chat_id,
                 "<b>2️⃣ Опыт в сфере обменов и оплат</b>\n\n"
                 "Выберите вариант, который лучше всего описывает ваш текущий опыт.",
@@ -245,8 +247,7 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data.startswith("apply_q2_"):
-            try:
-                await call.message.delete()
+            try: await call.message.delete()
             except: pass
             await bot.send_message(
                 chat_id,
@@ -261,26 +262,38 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
+        # === ИСПРАВЛЕНО: ПЕРЕХОД К ВЫБОРУ НАПРАВЛЕНИЙ (ШАГ 4) ===
         if call.data.startswith("apply_q3_") and call.data != "apply_q3_back":
             bank_value = call.data.split("_")[2]
             await state.update_data(bank=bank_value, directions=[])
+            
+            options = [
+                ("💳 Карта под оплату", "dir_card"),
+                ("📲 Переводы по СБП", "dir_sbp"),
+                ("🏦 Переводы по карте", "dir_transfer"),
+                ("📱 Пополнение номеров", "dir_phone"),
+                ("🔳 Оплата по QR-Коду", "dir_qr"),
+            ]
+            buttons = []
+            for label, k in options:
+                buttons.append([InlineKeyboardButton(text=label, callback_data=f"apply_q4_toggle_{k}")])
+            
+            buttons.append([
+                InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q3_back"),
+                InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")
+            ])
+
             try:
-                await call.message.edit_text(
-                    "<b>4️⃣ Направления работы</b>\n\n"
-                    "Можно выбрать несколько вариантов.",
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="💳 Карта под оплату", callback_data="apply_q4_toggle_dir_card")],
-                        [InlineKeyboardButton(text="📲 Переводы по СБП", callback_data="apply_q4_toggle_dir_sbp")],
-                        [InlineKeyboardButton(text="🏦 Переводы по карте", callback_data="apply_q4_toggle_dir_transfer")],
-                        [InlineKeyboardButton(text="📱 Пополнение номеров", callback_data="apply_q4_toggle_dir_phone")],
-                        [InlineKeyboardButton(text="🔳 Оплата по QR-Коду", callback_data="apply_q4_toggle_dir_qr")],
-                        [InlineKeyboardButton(text="⏪ Назад", callback_data="apply_q3_back"),
-                         InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
-                    ])
-                )
-            except Exception as e:
-                logger.error(f"[apply_q3] edit error: {e}")
+                await call.message.delete()
+            except: pass
+
+            await bot.send_message(
+                chat_id,
+                "<b>4️⃣ Направления работы</b>\n\n"
+                "Выберите один или несколько вариантов (появятся галочки), затем нажмите кнопку «➡️ Далее».",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+            )
             return await call.answer()
 
         if call.data == "apply_q3_back":
@@ -330,6 +343,7 @@ def register_client(dp, bot):
                 logger.error(f"[apply_q4_toggle] edit error: {e}")
             return await call.answer()
 
+        # === ИСПРАВЛЕНО: ОТПРАВКА ШАГА 5 (ВЫБОР ЧАТОВ) ===
         if call.data == "apply_q4_next":
             data = await state.get_data()
             selected_chats = list(data.get("chats", []))
@@ -350,7 +364,7 @@ def register_client(dp, bot):
             try:
                 await call.message.edit_text(
                     "<b>5️⃣ Активные рабочие чаты</b>\n\n"
-                    "<blockquote>Можно выбрать несколько вариантов, а затем нажать «Следующий вопрос».</blockquote>",
+                    "Выберите чаты, в которых вы уже состоите или работали. После выбора появится кнопка перехода дальше.",
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
                 )
@@ -358,7 +372,7 @@ def register_client(dp, bot):
                 await bot.send_message(
                     chat_id,
                     "<b>5️⃣ Активные рабочие чаты</b>\n\n"
-                    "<blockquote>Можно выбрать несколько вариантов, а затем нажать «Следующий вопрос».</blockquote>",
+                    "Выберите чаты, в которых вы уже состоите или работали. После выбора появится кнопка перехода дальше.",
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
                 )
