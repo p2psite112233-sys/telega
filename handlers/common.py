@@ -93,10 +93,8 @@ def register_common(dp, bot: Bot):
                 InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
             ],
             [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
-            [
-                InlineKeyboardButton(text=f"🙋‍♂️ Профиль • {balance:.2f} USDT", callback_data="client_profile"),
-                InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
-            ],
+            [InlineKeyboardButton(text=f"🙋‍♂️ Профиль • {balance:.2f} USDT", callback_data="client_profile")],
+            [InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")],
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
         ])
         await message.answer_photo(photo=BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
