@@ -40,6 +40,38 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
+    @dp.callback_query(F.data.startswith("worker_dispute_"))
+    async def worker_dispute(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[2])
+        uid = call.from_user.id
+        username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
+        row = await db.db_fetchone("SELECT status, user_id FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
+        if not row:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+        if row["status"] not in ("IN_PROGRESS",):
+            return await call.answer("❌ Спор недоступен", show_alert=True)
+        result = await db.db_execute(
+            "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status='IN_PROGRESS'", order_id
+        )
+        if "UPDATE 0" in result:
+            return await call.answer("❌ Статус уже изменён", show_alert=True)
+        from config import ADMIN_ID
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"🆘 <b>СПОР (от воркера) по заявке #{order_id}</b>\n\n"
+                f"👷 Воркер: {username} (<code>{uid}</code>)\n"
+                f"👤 Клиент: <code>{row['user_id']}</code>",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
+                    [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")]
+                ])
+            )
+        except Exception as e:
+            logger.error(f"[worker_dispute] notify error: {e}")
+        await call.answer("✅ Спор открыт! Ожидайте решения администратора.", show_alert=True)
+
     @dp.callback_query(F.data.startswith("dispute_"))
     async def dispute_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[1])
@@ -66,7 +98,11 @@ def register_client(dp, bot):
                 f"👤 Клиент: {username} (<code>{uid}</code>)\n"
                 f"👷 Воркер: <code>{row['worker_id']}</code>\n"
                 f"📊 Статус изменён на: DISPUTE",
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
+                    [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")]
+                ])
             )
         except Exception as e:
             logger.error(f"[dispute] notify error: {e}")
@@ -344,7 +380,7 @@ def register_client(dp, bot):
             total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
-                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="lk_active")]
             ])
             await bot.send_message(
@@ -438,7 +474,10 @@ def register_client(dp, bot):
             elif status == "CANCELLED": status_text = "❌ Отменена"
             else: status_text = "🟡 Новая"
             buttons = [[InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]]
-            if status in ("NEW", "IN_PROGRESS"):
+            if status == "NEW":
+                buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
+            elif status == "IN_PROGRESS":
+                buttons.insert(0, [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{row['id']}")])
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
             await bot.send_message(
                 chat_id,
