@@ -178,7 +178,11 @@ def register_client(dp, bot):
                     f"🆘 <b>Клиент открыл спор по заявке #{order_id}</b>\n\n"
                     f"📝 Причина: {reason}\n\n"
                     f"⏳ Ожидайте решения администратора. Средства заморожены.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="✍️ Написать сообщение", url="https://t.me/usudhsuhd")],
+                        [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+                    ])
                 )
             except:
                 pass
@@ -309,7 +313,13 @@ def register_client(dp, bot):
                     f"🆘 <b>Воркер открыл спор по заявке #{order_id}</b>\n\n"
                     f"📝 Причина: {reason}\n\n"
                     f"⏳ Ожидайте решения администратора. Средства заморожены.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
+                        [InlineKeyboardButton(text="🔐 Запросить код", callback_data=f"request_code_{order_id}")],
+                        [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                        [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+                    ])
                 )
             except:
                 pass
@@ -371,7 +381,7 @@ def register_client(dp, bot):
         amount_usdt = float(row["amount_usdt"]) if row["amount_usdt"] else 0.0
         if status == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
-        result = await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1 AND status='IN_PROGRESS'", order_id)
+        result = await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1 AND status IN ('IN_PROGRESS', 'DISPUTE')", order_id)
         if "UPDATE 0" in result:
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
         await db.unfreeze_to_worker(uid, worker_id, total_usdt, amount_usdt)
