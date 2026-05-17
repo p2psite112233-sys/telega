@@ -31,6 +31,10 @@ def register_admin(dp, bot: Bot):
                 InlineKeyboardButton(text="👥 Воркеры", callback_data="adm_workers_manage"),
                 InlineKeyboardButton(text="📢 Рассылка", callback_data="adm_broadcast")
             ],
+            [
+                InlineKeyboardButton(text="💳 Баланс юзера", callback_data="adm_balance_menu"),
+                InlineKeyboardButton(text="👤 Все юзеры", callback_data="adm_list_users")
+            ],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
         ])
         text = "🛠 <b>Панель управления проектом</b>"
@@ -67,11 +71,11 @@ def register_admin(dp, bot: Bot):
     @dp.callback_query(F.data.startswith("st_"))
     async def process_stats(call: types.CallbackQuery):
         period = call.data.split("_")[1]
-        now = datetime.now()
+        now = datetime.utcnow()
         since = now - (timedelta(days=1) if period == "day" else timedelta(weeks=1) if period == "week" else timedelta(days=30))
         label = "день" if period == "day" else "неделю" if period == "week" else "месяц"
         try:
-            since_naive = since.replace(tzinfo=None)
+            since_naive = since
             orders_rows = await db.db_fetchall("SELECT status, total_usdt, amount FROM orders WHERE created_at >= $1", since_naive)
             done_count, turnover_usdt, turnover_rub = 0, 0.0, 0.0
             for r in orders_rows:
@@ -199,32 +203,13 @@ def register_admin(dp, bot: Bot):
         await call.message.delete()
         for app in apps:
             kb = InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="✅ Принять", callback_data=f"app_accept_{app['user_id']}"),
-                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"app_decline_{app['user_id']}")
+                InlineKeyboardButton(text="✅ Принять", callback_data=f"adm_ap_yes_{app['user_id']}"),
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"adm_ap_no_{app['user_id']}")
             ]])
             await call.message.answer(f"👤 Заявка от: <code>{app['user_id']}</code>", reply_markup=kb, parse_mode="HTML")
         await call.answer()
 
-    # Хендлер для кнопок из adm_view_apps (app_accept_ / app_decline_)
-    @dp.callback_query(F.data.startswith("app_"))
-    async def process_app(call: types.CallbackQuery):
-        parts = call.data.split("_")
-        action, t_id = parts[1], int(parts[2])
-        if action == "accept":
-            await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
-            await db.db_execute("UPDATE worker_applications SET status='accepted' WHERE user_id=$1", t_id)
-            set_role(t_id, "worker")
-            try: await bot.send_message(t_id, "🎉 Ваша заявка на роль оплатчика одобрена!\n\nЖелаем удачной работы и успешных начинаний!❤️")
-            except: pass
-            await call.message.edit_text(f"✅ Юзер {t_id} принят")
-        else:
-            await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", t_id)
-            try: await bot.send_message(t_id, "❌ Ваша заявка на роль оплатчика отклонена.\n\nПопробуйте подать заявку позже. Возможно мы пересмотрим решение.")
-            except: pass
-            await call.message.edit_text(f"❌ Юзер {t_id} отклонен")
-        await call.answer()
-
-    # Хендлер для кнопок из apply.py (adm_ap_yes_ / adm_ap_no_)
+    # Хендлер для кнопок из apply.py и adm_view_apps
     @dp.callback_query(F.data.startswith("adm_ap_"))
     async def process_apply_decision(call: types.CallbackQuery):
         parts = call.data.split("_")
@@ -327,8 +312,8 @@ def register_admin(dp, bot: Bot):
         parts = call.data.split("_")
         action = parts[2]  # add / sub
         t_id = int(parts[3])
-        await state.update_data(bal_action=action, bal_uid=t_id)
         await state.set_state(AdminStates.waiting_for_balance_amount)
+        await state.update_data(bal_action=action, bal_uid=t_id)
         word = "пополнения" if action == "add" else "списания"
         await call.message.edit_text(
             f"💳 Введите сумму {word} в USDT:",
@@ -354,6 +339,57 @@ def register_admin(dp, bot: Bot):
             await message.answer(f"✅ С баланса юзера <code>{t_id}</code> списано <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
         await state.clear()
         await send_admin_menu(message)
+
+    @dp.callback_query(F.data == "adm_list_users")
+    async def list_users(call: types.CallbackQuery):
+        users = await db.db_fetchall("SELECT user_id, balance FROM balances ORDER BY user_id DESC LIMIT 30")
+        if not users:
+            return await call.answer("👤 Юзеров нет", show_alert=True)
+        buttons = []
+        for u in users:
+            uid = u['user_id']
+            bal = float(u['balance'] or 0)
+            try:
+                chat = await bot.get_chat(uid)
+                name = f"@{chat.username}" if chat.username else f"ID: {uid}"
+            except:
+                name = f"ID: {uid}"
+            buttons.append([InlineKeyboardButton(text=f"👤 {name} • {bal:.2f} USDT", callback_data=f"adm_user_info_{uid}")])
+        buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")])
+        await call.message.edit_text("👤 <b>Все юзеры:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("adm_user_info_"))
+    async def user_info(call: types.CallbackQuery):
+        uid = int(call.data.split("_")[3])
+        try:
+            chat = await bot.get_chat(uid)
+            name = f"@{chat.username}" if chat.username else f"ID: {uid}"
+        except:
+            name = f"ID: {uid}"
+        balance = await db.get_balance(uid)
+        frozen = await db.get_frozen(uid)
+        done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='DONE'", uid)
+        cancelled = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='CANCELLED'", uid)
+        active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS')", uid)
+        text = (
+            f"👤 <b>{name}</b>\n"
+            f"ID: <code>{uid}</code>\n\n"
+            f"💰 Баланс: <b>{balance:.2f} USDT</b>\n"
+            f"🔒 Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
+            f"📊 <b>Статистика заявок:</b>\n"
+            f"• Завершённых: {done['count']}\n"
+            f"• Отменённых: {cancelled['count']}\n"
+            f"• Активных: {active['count']}"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Пополнить", callback_data=f"adm_bal_add_{uid}")],
+            [InlineKeyboardButton(text="➖ Списать", callback_data=f"adm_bal_sub_{uid}")],
+            [InlineKeyboardButton(text="🔄 Обнулить", callback_data=f"adm_bal_reset_{uid}")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_list_users")]
+        ])
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await call.answer()
 
     @dp.callback_query(F.data == "adm_close")
     async def close_admin(call: types.CallbackQuery):
