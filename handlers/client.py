@@ -400,6 +400,14 @@ def register_client(dp, bot):
         client_balance_new = await db.get_balance(uid)
         worker_balance = await db.get_balance(worker_id)
         worker_amount = round(amount_usdt + (total_usdt - amount_usdt) * 0.8, 4)
+
+        # Удаляем сообщение воркера "Ожидаем подтверждения"
+        w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
+        if w_row and w_row["worker_message_id"]:
+            try:
+                await bot.delete_message(chat_id=worker_id, message_id=w_row["worker_message_id"])
+            except:
+                pass
         try:
             await bot.edit_message_text(
                 chat_id=uid, message_id=client_msg_id,
