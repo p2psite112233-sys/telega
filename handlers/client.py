@@ -129,13 +129,17 @@ def register_client(dp, bot):
             except:
                 pass
 
-        # Меняем статус на DISPUTE
+        # Меняем статус на DISPUTE и записываем кто открыл
         result = await db.db_execute(
-            "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status='IN_PROGRESS'", order_id
+            "UPDATE orders SET status='DISPUTE', dispute_opened_by='client' WHERE id=$1 AND status='IN_PROGRESS'", order_id
         )
         if "UPDATE 0" in result:
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
+
+        row_order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
+        amount = float(row_order["amount"]) if row_order else 0
+        total_usdt = float(row_order["total_usdt"]) if row_order else 0
 
         try:
             await bot.send_photo(
@@ -143,8 +147,10 @@ def register_client(dp, bot):
                 photo=photo_id,
                 caption=(
                     f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
+                    f"⚡️ <b>Открыл:</b> Клиент\n"
                     f"👤 Клиент: {username} (<code>{uid}</code>)\n"
-                    f"👷 Воркер: <code>{worker_id}</code>\n\n"
+                    f"👷 Воркер: <code>{worker_id}</code>\n"
+                    f"💰 Сумма: {amount:.2f} RUB ({total_usdt:.4f} USDT)\n\n"
                     f"📝 <b>Причина:</b> {reason}"
                 ),
                 parse_mode="HTML",
@@ -248,20 +254,26 @@ def register_client(dp, bot):
                 pass
 
         result = await db.db_execute(
-            "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status='IN_PROGRESS'", order_id
+            "UPDATE orders SET status='DISPUTE', dispute_opened_by='worker' WHERE id=$1 AND status='IN_PROGRESS'", order_id
         )
         if "UPDATE 0" in result:
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
+
+        row_order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
+        amount = float(row_order["amount"]) if row_order else 0
+        total_usdt_val = float(row_order["total_usdt"]) if row_order else 0
 
         try:
             await bot.send_photo(
                 ADMIN_ID,
                 photo=photo_id,
                 caption=(
-                    f"🆘 <b>СПОР (от воркера) по заявке #{order_id}</b>\n\n"
+                    f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
+                    f"⚡️ <b>Открыл:</b> Воркер\n"
                     f"👷 Воркер: {username} (<code>{uid}</code>)\n"
-                    f"👤 Клиент: <code>{client_id}</code>\n\n"
+                    f"👤 Клиент: <code>{client_id}</code>\n"
+                    f"💰 Сумма: {amount:.2f} RUB ({total_usdt_val:.4f} USDT)\n\n"
                     f"📝 <b>Причина:</b> {reason}"
                 ),
                 parse_mode="HTML",
