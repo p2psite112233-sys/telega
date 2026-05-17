@@ -35,6 +35,7 @@ def register_admin(dp, bot: Bot):
                 InlineKeyboardButton(text="💳 Баланс юзера", callback_data="adm_balance_menu"),
                 InlineKeyboardButton(text="👤 Все юзеры", callback_data="adm_list_users")
             ],
+            [InlineKeyboardButton(text="🆘 Активные споры", callback_data="adm_disputes")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
         ])
         text = "🛠 <b>Панель управления проектом</b>"
@@ -387,6 +388,81 @@ def register_admin(dp, bot: Bot):
             [InlineKeyboardButton(text="➖ Списать", callback_data=f"adm_bal_sub_{uid}")],
             [InlineKeyboardButton(text="🔄 Обнулить", callback_data=f"adm_bal_reset_{uid}")],
             [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_list_users")]
+        ])
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("dispute_refund_"))
+    async def dispute_refund(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[2])
+        row = await db.db_fetchone("SELECT user_id, total_usdt FROM orders WHERE id=$1 AND status='DISPUTE'", order_id)
+        if not row:
+            return await call.answer("❌ Заявка не найдена или уже решена", show_alert=True)
+        await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
+        await db.unfreeze_back(row['user_id'], float(row['total_usdt'] or 0))
+        try:
+            await bot.send_message(row['user_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства возвращены на баланс.")
+        except: pass
+        await call.message.edit_text(f"✅ Спор #{order_id} — средства возвращены клиенту.")
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("dispute_pay_worker_"))
+    async def dispute_pay_worker(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[3])
+        row = await db.db_fetchone("SELECT user_id, worker_id, total_usdt, amount_usdt FROM orders WHERE id=$1 AND status='DISPUTE'", order_id)
+        if not row:
+            return await call.answer("❌ Заявка не найдена или уже решена", show_alert=True)
+        await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1", order_id)
+        await db.unfreeze_to_worker(row['user_id'], row['worker_id'], float(row['total_usdt'] or 0), float(row['amount_usdt'] or 0))
+        try:
+            await bot.send_message(row['worker_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства зачислены.")
+        except: pass
+        try:
+            await bot.send_message(row['user_id'], f"❌ Спор по заявке #{order_id} решён не в вашу пользу.")
+        except: pass
+        await call.message.edit_text(f"✅ Спор #{order_id} — средства отправлены воркеру.")
+        await call.answer()
+
+    @dp.callback_query(F.data == "adm_disputes")
+    async def active_disputes(call: types.CallbackQuery):
+        disputes = await db.db_fetchall(
+            "SELECT id, user_id, worker_id, amount FROM orders WHERE status='DISPUTE' ORDER BY id DESC LIMIT 20"
+        )
+        if not disputes:
+            return await call.answer("✅ Активных споров нет", show_alert=True)
+        buttons = []
+        for d in disputes:
+            buttons.append([InlineKeyboardButton(
+                text=f"🆘 #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
+                callback_data=f"adm_dispute_info_{d['id']}"
+            )])
+        buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")])
+        await call.message.edit_text(
+            f"🆘 <b>Активные споры</b>\n\nВсего: {len(disputes)}",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
+        )
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("adm_dispute_info_"))
+    async def dispute_info(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[3])
+        row = await db.db_fetchone(
+            "SELECT id, user_id, worker_id, amount, total_usdt FROM orders WHERE id=$1 AND status='DISPUTE'", order_id
+        )
+        if not row:
+            return await call.answer("❌ Спор не найден или уже решён", show_alert=True)
+        text = (
+            f"🆘 <b>Спор по заявке #{order_id}</b>\n\n"
+            f"👤 Клиент: <code>{row['user_id']}</code>\n"
+            f"👷 Воркер: <code>{row['worker_id']}</code>\n"
+            f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
+            f"💎 Заморожено: {float(row['total_usdt'] or 0):.4f} USDT"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
+            [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_disputes")]
         ])
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
