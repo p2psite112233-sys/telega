@@ -352,7 +352,8 @@ def register_common(dp, bot: Bot):
             f"👨‍💻 Исполнитель: назначается\n\n"
             f"⏳ Ожидайте — скоро свяжемся с вами",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
+                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")]
             ])
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", client_msg.message_id, order_id)
