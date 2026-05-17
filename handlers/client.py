@@ -139,6 +139,19 @@ def register_client(dp, bot):
         except Exception as e:
             logger.error(f"[dispute_screenshot] notify error: {e}")
 
+        # Уведомляем воркера
+        if worker_id:
+            try:
+                await bot.send_message(
+                    worker_id,
+                    f"🆘 <b>Клиент открыл спор по заявке #{order_id}</b>\n\n"
+                    f"📝 Причина: {reason}\n\n"
+                    f"⏳ Ожидайте решения администратора. Средства заморожены.",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
+
         await state.clear()
         await message.answer(
             f"✅ <b>Спор по заявке #{order_id} открыт!</b>\n\n"
@@ -226,6 +239,19 @@ def register_client(dp, bot):
             )
         except Exception as e:
             logger.error(f"[worker_dispute_screenshot] notify error: {e}")
+
+        # Уведомляем клиента
+        if client_id:
+            try:
+                await bot.send_message(
+                    client_id,
+                    f"🆘 <b>Воркер открыл спор по заявке #{order_id}</b>\n\n"
+                    f"📝 Причина: {reason}\n\n"
+                    f"⏳ Ожидайте решения администратора. Средства заморожены.",
+                    parse_mode="HTML"
+                )
+            except:
+                pass
 
         await state.clear()
         await message.answer(
@@ -357,7 +383,8 @@ def register_client(dp, bot):
             return await call.answer()
 
         if call.data == "client_back_menu":
-            await bot.send_message(chat_id, CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD, parse_mode="HTML")
+            from config import BANNER_FILE_ID
+            await bot.send_photo(chat_id, photo=BANNER_FILE_ID, caption=CLIENT_MENU_TEXT, reply_markup=CLIENT_MENU_KEYBOARD, parse_mode="HTML")
             return await call.answer()
 
         if call.data == "client_profile":
