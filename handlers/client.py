@@ -62,7 +62,7 @@ def register_client(dp, bot):
         await state.set_state(DisputeStates.waiting_for_reason)
         await state.update_data(dispute_order_id=order_id, dispute_worker_id=row["worker_id"])
         try:
-            await call.message.edit_text(
+            msg = await call.message.edit_text(
                 f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\n"
                 f"Шаг 1/2: Опишите причину спора — что пошло не так?",
                 parse_mode="HTML",
@@ -71,13 +71,14 @@ def register_client(dp, bot):
                 ])
             )
         except:
-            await bot.send_message(call.message.chat.id,
+            msg = await bot.send_message(call.message.chat.id,
                 f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
                 ])
             )
+        await state.update_data(dispute_step1_msg_id=msg.message_id if msg else None)
         await call.answer()
 
     @dp.callback_query(F.data == "dispute_cancel")
@@ -91,12 +92,19 @@ def register_client(dp, bot):
 
     @dp.message(DisputeStates.waiting_for_reason)
     async def dispute_reason(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        step1_msg_id = data.get("dispute_step1_msg_id")
         await state.update_data(dispute_reason=message.text)
         await state.set_state(DisputeStates.waiting_for_screenshot)
         try:
             await message.delete()
         except:
             pass
+        if step1_msg_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=step1_msg_id)
+            except:
+                pass
         msg = await message.answer(
             "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\n"
             "Прикрепите скрин подтверждения (или любое доказательство).",
@@ -197,7 +205,7 @@ def register_client(dp, bot):
         await state.set_state(DisputeStates.waiting_for_worker_reason)
         await state.update_data(dispute_order_id=order_id, dispute_client_id=row["user_id"])
         try:
-            await call.message.edit_text(
+            msg = await call.message.edit_text(
                 f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\n"
                 f"Шаг 1/2: Опишите причину спора.",
                 parse_mode="HTML",
@@ -206,23 +214,31 @@ def register_client(dp, bot):
                 ])
             )
         except:
-            await bot.send_message(call.message.chat.id,
+            msg = await bot.send_message(call.message.chat.id,
                 f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
                 ])
             )
+        await state.update_data(dispute_step1_msg_id=msg.message_id if msg else None)
         await call.answer()
 
     @dp.message(DisputeStates.waiting_for_worker_reason)
     async def worker_dispute_reason(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        step1_msg_id = data.get("dispute_step1_msg_id")
         await state.update_data(dispute_reason=message.text)
         await state.set_state(DisputeStates.waiting_for_worker_screenshot)
         try:
             await message.delete()
         except:
             pass
+        if step1_msg_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=step1_msg_id)
+            except:
+                pass
         msg = await message.answer(
             "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите доказательство.",
             parse_mode="HTML",
