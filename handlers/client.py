@@ -2,9 +2,10 @@ import logging
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
 
 import db
-from config import PROFILE_BANNER_FILE_ID
+from config import PROFILE_BANNER_FILE_ID, ADMIN_ID
 from handlers.common import WorkerRegStates
 
 logger = logging.getLogger(__name__)
@@ -38,30 +39,185 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 
+class DisputeStates(StatesGroup):
+    waiting_for_reason = State()
+    waiting_for_screenshot = State()
+    waiting_for_worker_reason = State()
+    waiting_for_worker_screenshot = State()
+
+
 def register_client(dp, bot):
 
+    # --- СПОР КЛИЕНТА ---
+    @dp.callback_query(F.data.startswith("dispute_"))
+    async def dispute_start(call: types.CallbackQuery, state: FSMContext):
+        order_id = int(call.data.split("_")[1])
+        uid = call.from_user.id
+        row = await db.db_fetchone("SELECT status, worker_id FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
+        if not row:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+        if row["status"] not in ("IN_PROGRESS",):
+            return await call.answer("❌ Спор недоступен для этой заявки", show_alert=True)
+
+        await state.set_state(DisputeStates.waiting_for_reason)
+        await state.update_data(dispute_order_id=order_id, dispute_worker_id=row["worker_id"])
+        try:
+            await call.message.edit_text(
+                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\n"
+                f"Шаг 1/2: Опишите причину спора — что пошло не так?",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
+                ])
+            )
+        except:
+            await bot.send_message(call.message.chat.id,
+                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
+                ])
+            )
+        await call.answer()
+
+    @dp.callback_query(F.data == "dispute_cancel")
+    async def dispute_cancel(call: types.CallbackQuery, state: FSMContext):
+        await state.clear()
+        await call.answer("Спор отменён", show_alert=True)
+        try:
+            await call.message.delete()
+        except:
+            pass
+
+    @dp.message(DisputeStates.waiting_for_reason)
+    async def dispute_reason(message: types.Message, state: FSMContext):
+        await state.update_data(dispute_reason=message.text)
+        await state.set_state(DisputeStates.waiting_for_screenshot)
+        await message.answer(
+            "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\n"
+            "Прикрепите скрин подтверждения (или любое доказательство).",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
+            ])
+        )
+
+    @dp.message(DisputeStates.waiting_for_screenshot, F.photo)
+    async def dispute_screenshot(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        order_id = data.get("dispute_order_id")
+        worker_id = data.get("dispute_worker_id")
+        reason = data.get("dispute_reason")
+        uid = message.from_user.id
+        username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
+        photo_id = message.photo[-1].file_id
+
+        # Меняем статус на DISPUTE
+        result = await db.db_execute(
+            "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status='IN_PROGRESS'", order_id
+        )
+        if "UPDATE 0" in result:
+            await state.clear()
+            return await message.answer("❌ Статус заявки уже изменён.")
+
+        try:
+            await bot.send_photo(
+                ADMIN_ID,
+                photo=photo_id,
+                caption=(
+                    f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
+                    f"👤 Клиент: {username} (<code>{uid}</code>)\n"
+                    f"👷 Воркер: <code>{worker_id}</code>\n\n"
+                    f"📝 <b>Причина:</b> {reason}"
+                ),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
+                    [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")]
+                ])
+            )
+        except Exception as e:
+            logger.error(f"[dispute_screenshot] notify error: {e}")
+
+        await state.clear()
+        await message.answer(
+            f"✅ <b>Спор по заявке #{order_id} открыт!</b>\n\n"
+            f"Администратор получил уведомление с вашим объяснением и скриншотом.\n"
+            f"Средства заморожены до решения спора.",
+            parse_mode="HTML"
+        )
+
+    # --- СПОР ВОРКЕРА ---
     @dp.callback_query(F.data.startswith("worker_dispute_"))
-    async def worker_dispute(call: types.CallbackQuery):
+    async def worker_dispute_start(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
-        username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
         row = await db.db_fetchone("SELECT status, user_id FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
         if row["status"] not in ("IN_PROGRESS",):
             return await call.answer("❌ Спор недоступен", show_alert=True)
+
+        await state.set_state(DisputeStates.waiting_for_worker_reason)
+        await state.update_data(dispute_order_id=order_id, dispute_client_id=row["user_id"])
+        try:
+            await call.message.edit_text(
+                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\n"
+                f"Шаг 1/2: Опишите причину спора.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
+                ])
+            )
+        except:
+            await bot.send_message(call.message.chat.id,
+                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
+                ])
+            )
+        await call.answer()
+
+    @dp.message(DisputeStates.waiting_for_worker_reason)
+    async def worker_dispute_reason(message: types.Message, state: FSMContext):
+        await state.update_data(dispute_reason=message.text)
+        await state.set_state(DisputeStates.waiting_for_worker_screenshot)
+        await message.answer(
+            "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите доказательство.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
+            ])
+        )
+
+    @dp.message(DisputeStates.waiting_for_worker_screenshot, F.photo)
+    async def worker_dispute_screenshot(message: types.Message, state: FSMContext):
+        data = await state.get_data()
+        order_id = data.get("dispute_order_id")
+        client_id = data.get("dispute_client_id")
+        reason = data.get("dispute_reason")
+        uid = message.from_user.id
+        username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
+        photo_id = message.photo[-1].file_id
+
         result = await db.db_execute(
             "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status='IN_PROGRESS'", order_id
         )
         if "UPDATE 0" in result:
-            return await call.answer("❌ Статус уже изменён", show_alert=True)
-        from config import ADMIN_ID
+            await state.clear()
+            return await message.answer("❌ Статус заявки уже изменён.")
+
         try:
-            await bot.send_message(
+            await bot.send_photo(
                 ADMIN_ID,
-                f"🆘 <b>СПОР (от воркера) по заявке #{order_id}</b>\n\n"
-                f"👷 Воркер: {username} (<code>{uid}</code>)\n"
-                f"👤 Клиент: <code>{row['user_id']}</code>",
+                photo=photo_id,
+                caption=(
+                    f"🆘 <b>СПОР (от воркера) по заявке #{order_id}</b>\n\n"
+                    f"👷 Воркер: {username} (<code>{uid}</code>)\n"
+                    f"👤 Клиент: <code>{client_id}</code>\n\n"
+                    f"📝 <b>Причина:</b> {reason}"
+                ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
@@ -69,54 +225,14 @@ def register_client(dp, bot):
                 ])
             )
         except Exception as e:
-            logger.error(f"[worker_dispute] notify error: {e}")
-        await call.answer("✅ Спор открыт! Ожидайте решения администратора.", show_alert=True)
+            logger.error(f"[worker_dispute_screenshot] notify error: {e}")
 
-    @dp.callback_query(F.data.startswith("dispute_"))
-    async def dispute_order(call: types.CallbackQuery):
-        order_id = int(call.data.split("_")[1])
-        uid = call.from_user.id
-        username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
-        row = await db.db_fetchone("SELECT status, worker_id FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
-        if not row:
-            return await call.answer("❌ Заявка не найдена", show_alert=True)
-        if row["status"] not in ("NEW", "IN_PROGRESS"):
-            return await call.answer("❌ Спор недоступен для этой заявки", show_alert=True)
-
-        # Меняем статус на DISPUTE — блокируем воркера
-        result = await db.db_execute(
-            "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status IN ('NEW', 'IN_PROGRESS')", order_id
+        await state.clear()
+        await message.answer(
+            f"✅ <b>Спор по заявке #{order_id} открыт!</b>\n\n"
+            f"Ожидайте решения администратора.",
+            parse_mode="HTML"
         )
-        if "UPDATE 0" in result:
-            return await call.answer("❌ Статус заявки уже изменён", show_alert=True)
-
-        from config import ADMIN_ID
-        try:
-            await bot.send_message(
-                ADMIN_ID,
-                f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
-                f"👤 Клиент: {username} (<code>{uid}</code>)\n"
-                f"👷 Воркер: <code>{row['worker_id']}</code>\n"
-                f"📊 Статус изменён на: DISPUTE",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
-                    [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")]
-                ])
-            )
-        except Exception as e:
-            logger.error(f"[dispute] notify error: {e}")
-
-        try:
-            await call.message.edit_text(
-                f"🆘 <b>Спор по заявке #{order_id} открыт</b>\n\n"
-                f"Администратор получил уведомление и разберётся в ближайшее время.\n"
-                f"Средства заморожены до решения спора.",
-                parse_mode="HTML"
-            )
-        except:
-            pass
-        await call.answer("✅ Спор открыт!", show_alert=True)
 
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
@@ -130,19 +246,14 @@ def register_client(dp, bot):
             return await call.answer("❌ Нельзя отменить завершённую заявку", show_alert=True)
         if status not in ("NEW", "IN_PROGRESS"):
             return await call.answer("❌ Заявку нельзя отменить", show_alert=True)
-
-        # Сначала меняем статус — защита от race condition
         result = await db.db_execute(
             "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status IN ('NEW', 'IN_PROGRESS')", order_id
         )
         if "UPDATE 0" in result:
             return await call.answer("❌ Заявка уже отменена или завершена", show_alert=True)
-
-        # Только после успешного UPDATE возвращаем деньги
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         worker_id = row["worker_id"]
         await db.unfreeze_back(uid, total_usdt)
-
         try:
             await call.message.edit_text(f"❌ Заявка #{order_id} отменена\n\n💰 Средства возвращены на баланс")
         except Exception as e:
@@ -347,7 +458,6 @@ def register_client(dp, bot):
             await bot.send_message(chat_id, f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=InlineKeyboardMarkup(inline_keyboard=card_buttons))
             return await call.answer()
 
-        # Список активных заявок воркера — инлайн кнопками
         if call.data == "lk_active":
             orders = await db.db_fetchall(
                 "SELECT id, amount, total_usdt FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC", uid
@@ -371,7 +481,6 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
-        # Детализация активной заявки воркера
         if call.data.startswith("active_order_"):
             order_id = int(call.data.split("_")[2])
             order = await db.db_fetchone("SELECT id, amount, total_usdt FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
