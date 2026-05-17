@@ -185,11 +185,18 @@ def register_common(dp, bot: Bot):
     @dp.callback_query(F.data == "client_topup")
     async def topup_start(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(ClientStates.waiting_for_topup_amount)
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.message.answer(
             "💳 <b>Пополнение баланса</b>\n\n"
             "Введите сумму пополнения в рублях.\n\n"
             "💸 Минимальная сумма: <b>100 RUB</b>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+            ])
         )
         await call.answer()
 
