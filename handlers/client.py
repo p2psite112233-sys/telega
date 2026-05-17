@@ -327,8 +327,16 @@ def register_client(dp, bot):
         await state.clear()
         await message.answer(
             f"✅ <b>Спор по заявке #{order_id} открыт!</b>\n\n"
+            f"🆔 ID заявки: #{order_id}\n"
+            f"💰 Сумма: {amount:.2f} RUB\n"
+            f"💎 Заморожено: {total_usdt_val:.4f} USDT\n\n"
             f"Ожидайте решения администратора.",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+            ])
         )
 
     @dp.callback_query(F.data.startswith("cancel_order_"))
@@ -384,6 +392,10 @@ def register_client(dp, bot):
         result = await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1 AND status IN ('IN_PROGRESS', 'DISPUTE')", order_id)
         if "UPDATE 0" in result:
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
+        try:
+            await call.message.delete()
+        except:
+            pass
         await db.unfreeze_to_worker(uid, worker_id, total_usdt, amount_usdt)
         client_balance_new = await db.get_balance(uid)
         worker_balance = await db.get_balance(worker_id)
