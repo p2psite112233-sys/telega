@@ -109,7 +109,7 @@ def register_common(dp, bot: Bot):
                 "✅ Вы сами выбираете, какую заявку взять в работу"
             )
             worker_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📥 Доступные заявки", callback_data="lk_active")],
+                [InlineKeyboardButton(text="📥 Доступные заявки", callback_data="lk_available")],
                 [InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="lk_home")],
                 [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
             ])
