@@ -93,7 +93,11 @@ def register_client(dp, bot):
     async def dispute_reason(message: types.Message, state: FSMContext):
         await state.update_data(dispute_reason=message.text)
         await state.set_state(DisputeStates.waiting_for_screenshot)
-        await message.answer(
+        try:
+            await message.delete()
+        except:
+            pass
+        msg = await message.answer(
             "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\n"
             "Прикрепите скрин подтверждения (или любое доказательство).",
             parse_mode="HTML",
@@ -101,6 +105,7 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
             ])
         )
+        await state.update_data(dispute_step2_msg_id=msg.message_id)
 
     @dp.message(DisputeStates.waiting_for_screenshot, F.photo)
     async def dispute_screenshot(message: types.Message, state: FSMContext):
@@ -108,9 +113,21 @@ def register_client(dp, bot):
         order_id = data.get("dispute_order_id")
         worker_id = data.get("dispute_worker_id")
         reason = data.get("dispute_reason")
+        step2_msg_id = data.get("dispute_step2_msg_id")
         uid = message.from_user.id
         username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
         photo_id = message.photo[-1].file_id
+
+        # Удаляем сообщение шага 2 и скриншот
+        try:
+            await message.delete()
+        except:
+            pass
+        if step2_msg_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=step2_msg_id)
+            except:
+                pass
 
         # Меняем статус на DISPUTE
         result = await db.db_execute(
@@ -196,13 +213,18 @@ def register_client(dp, bot):
     async def worker_dispute_reason(message: types.Message, state: FSMContext):
         await state.update_data(dispute_reason=message.text)
         await state.set_state(DisputeStates.waiting_for_worker_screenshot)
-        await message.answer(
+        try:
+            await message.delete()
+        except:
+            pass
+        msg = await message.answer(
             "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите доказательство.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
             ])
         )
+        await state.update_data(dispute_step2_msg_id=msg.message_id)
 
     @dp.message(DisputeStates.waiting_for_worker_screenshot, F.photo)
     async def worker_dispute_screenshot(message: types.Message, state: FSMContext):
@@ -210,9 +232,20 @@ def register_client(dp, bot):
         order_id = data.get("dispute_order_id")
         client_id = data.get("dispute_client_id")
         reason = data.get("dispute_reason")
+        step2_msg_id = data.get("dispute_step2_msg_id")
         uid = message.from_user.id
         username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
         photo_id = message.photo[-1].file_id
+
+        try:
+            await message.delete()
+        except:
+            pass
+        if step2_msg_id:
+            try:
+                await bot.delete_message(chat_id=message.chat.id, message_id=step2_msg_id)
+            except:
+                pass
 
         result = await db.db_execute(
             "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status='IN_PROGRESS'", order_id
@@ -624,4 +657,3 @@ def register_client(dp, bot):
             return await call.answer()
 
         await call.answer("🚧 Раздел в разработке", show_alert=True)
- 
