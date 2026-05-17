@@ -7,7 +7,6 @@ from aiogram.fsm.state import StatesGroup, State
 import db
 from config import PROFILE_BANNER_FILE_ID, BANNER_FILE_ID
 from utils.shared import get_role, workers
-from utils.crypto import crypto_get_rate
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +198,8 @@ def register_worker(dp, bot):
             f"{order_info(order_id, amount, total_usdt)}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")]
+                [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
             ])
         )
         await call.answer()
@@ -280,9 +280,11 @@ def register_worker(dp, bot):
             f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
             f"{order_info(order_id, float(order['amount']), total_usdt)}\n\n"
             f"⏳ Ожидаем запрос кода от клиента",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
+            ])
         )
-        # Сохраняем новый message_id и удаляем старое
         old_worker_msg_id = None
         try:
             w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
@@ -329,7 +331,8 @@ def register_worker(dp, bot):
             f"{order_info(order_id, amount, total_usdt)}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")]
+                [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
             ])
         )
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", new_worker_msg.message_id, order_id)
@@ -384,8 +387,13 @@ def register_worker(dp, bot):
                  f"💳 Услуга: Карта под оплату\n"
                  f"💰 Сумма: {amount:.2f} RUB\n\n"
                  f"📊 Статус: 🟢 В работе\n\n"
-                 f"🔐 Код подтверждения: <code>{code}</code>",
-            parse_mode="HTML"
+                 f"🔐 Код подтверждения: <code>{code}</code>\n\n"
+                 f"⏳ Нажмите кнопку ниже, если оплата прошла успешно",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")]
+            ])
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
         try:
@@ -395,67 +403,12 @@ def register_worker(dp, bot):
 
         worker_msg = await message.answer(
             f"✅ Код отправлен клиенту\n\n"
-            f"{order_info(order_id, amount, total_usdt)}",
+            f"{order_info(order_id, amount, total_usdt)}\n\n"
+            f"⏳ Ожидаем подтверждения от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"worker_confirm_{order_id}")]
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
             ])
         )
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
         await state.clear()
-
-    @dp.callback_query(F.data.startswith("worker_confirm_"))
-    async def worker_confirm(call: types.CallbackQuery):
-        order_id = int(call.data.split("_")[2])
-        uid = call.from_user.id
-
-        order = await db.db_fetchone(
-            "SELECT user_id, amount, client_message_id, total_usdt FROM orders WHERE id=$1 AND worker_id=$2 AND status='IN_PROGRESS'",
-            order_id, uid
-        )
-        if not order:
-            return await call.answer("❌ Заявка неактивна или уже подтверждена", show_alert=True)
-
-        total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0.0
-
-        new_msg = await bot.send_message(
-            chat_id=order["user_id"],
-            text=f"🎉 Заявка #{order_id}\n\n"
-                 f"💳 Услуга: Карта под оплату\n"
-                 f"💰 Сумма: {float(order['amount']):.2f} RUB\n\n"
-                 f"📊 Статус: 🟡 Ожидание подтверждения\n"
-                 f"💸 К списанию: {total_usdt:.4f} USDT\n\n"
-                 f"⏳ Пожалуйста, подтвердите оплату",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"client_paid_{order_id}")]
-            ])
-        )
-        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
-        try:
-            await bot.delete_message(order["user_id"], order["client_message_id"])
-        except Exception as e:
-            logger.error(f"[worker_confirm] delete error: {e}")
-
-        worker_msg = await call.message.answer(
-            f"⏳ Ожидаем подтверждения от клиента\n\n"
-            f"{order_info(order_id, float(order['amount']), total_usdt)}",
-            parse_mode="HTML"
-        )
-        old_worker_msg_id = None
-        try:
-            w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
-            if w_row:
-                old_worker_msg_id = w_row["worker_message_id"]
-        except:
-            pass
-        await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
-        if old_worker_msg_id:
-            try:
-                await bot.delete_message(chat_id=uid, message_id=old_worker_msg_id)
-            except:
-                pass
-        try:
-            await call.message.delete()
-        except:
-            pass
-        await call.answer()
