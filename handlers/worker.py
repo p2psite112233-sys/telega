@@ -264,8 +264,7 @@ def register_worker(dp, bot):
                  f"⏳ Запросите код для успешной оплаты",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
-                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
             ])
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
