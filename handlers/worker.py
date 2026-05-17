@@ -322,6 +322,19 @@ def register_worker(dp, bot):
         amount = float(order["amount"]) if order else 0.0
         total_usdt = float(order["total_usdt"]) if order and order["total_usdt"] else 0.0
 
+        # Отправляем клиенту новое сообщение со статусом
+        new_client_msg = await bot.send_message(
+            call.from_user.id,
+            f"🎉 Заявка #{order_id}\n\n"
+            f"💳 Услуга: Карта под оплату\n"
+            f"💰 Сумма: {amount:.2f} RUB\n\n"
+            f"📊 Статус: 🟢 В работе\n\n"
+            f"🔑 Код запрошен у исполнителя\n"
+            f"⏳ Ожидайте код...",
+            parse_mode="HTML"
+        )
+        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_client_msg.message_id, order_id)
+
         try:
             w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
             if w_row and w_row["worker_message_id"]:
