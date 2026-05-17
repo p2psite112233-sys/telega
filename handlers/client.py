@@ -196,6 +196,7 @@ def register_client(dp, bot):
         await state.clear()
         d_text = dispute_text_base(order_id, amount, reason)
         d_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
             [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
         ])
