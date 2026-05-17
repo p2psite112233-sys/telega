@@ -181,8 +181,7 @@ def register_admin(dp, bot: Bot):
     async def fire_worker(call: types.CallbackQuery):
         uid = int(call.data.split("_")[3])
         await db.db_execute("DELETE FROM workers WHERE user_id=$1", uid)
-        from utils.shared import roles
-        roles.pop(uid, None)
+        set_role(uid, "user")
         try:
             await bot.send_message(uid, "❌ Вы были сняты с должности воркера.")
         except:
