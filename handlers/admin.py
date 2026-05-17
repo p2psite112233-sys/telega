@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 class AdminStates(StatesGroup):
     waiting_for_broadcast_text = State()
     waiting_for_worker_id = State()
+    waiting_for_balance_uid = State()
+    waiting_for_balance_amount = State()
 
 def register_admin(dp, bot: Bot):
 
@@ -279,6 +281,77 @@ def register_admin(dp, bot: Bot):
                 await asyncio.sleep(0.05)
             except: pass
         await status_msg.edit_text(f"✅ Рассылка завершена. Получили: {sent}")
+        await state.clear()
+        await send_admin_menu(message)
+
+    @dp.callback_query(F.data == "adm_balance_menu")
+    async def balance_menu(call: types.CallbackQuery, state: FSMContext):
+        await state.set_state(AdminStates.waiting_for_balance_uid)
+        await call.message.edit_text(
+            "💳 <b>Управление балансом</b>\n\nВведите ID пользователя:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]])
+        )
+        await call.answer()
+
+    @dp.message(AdminStates.waiting_for_balance_uid)
+    async def balance_uid_handler(message: types.Message, state: FSMContext):
+        try:
+            t_id = int(message.text.strip())
+        except:
+            return await message.answer("❌ Введите корректный ID (число).")
+        balance = await db.get_balance(t_id)
+        await state.update_data(balance_uid=t_id)
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Пополнить", callback_data=f"adm_bal_add_{t_id}")],
+            [InlineKeyboardButton(text="➖ Списать", callback_data=f"adm_bal_sub_{t_id}")],
+            [InlineKeyboardButton(text="🔄 Обнулить", callback_data=f"adm_bal_reset_{t_id}")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
+        ])
+        await message.answer(
+            f"👤 ID: <code>{t_id}</code>\n💰 Баланс: <b>{balance:.2f} USDT</b>",
+            parse_mode="HTML", reply_markup=kb
+        )
+        await state.clear()
+
+    @dp.callback_query(F.data.startswith("adm_bal_reset_"))
+    async def bal_reset(call: types.CallbackQuery):
+        t_id = int(call.data.split("_")[3])
+        await db.db_execute("UPDATE balances SET balance=0 WHERE user_id=$1", t_id)
+        await call.message.edit_text(f"✅ Баланс юзера <code>{t_id}</code> обнулён.", parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]]))
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("adm_bal_add_") | F.data.startswith("adm_bal_sub_"))
+    async def bal_change_start(call: types.CallbackQuery, state: FSMContext):
+        parts = call.data.split("_")
+        action = parts[2]  # add / sub
+        t_id = int(parts[3])
+        await state.update_data(bal_action=action, bal_uid=t_id)
+        await state.set_state(AdminStates.waiting_for_balance_amount)
+        word = "пополнения" if action == "add" else "списания"
+        await call.message.edit_text(
+            f"💳 Введите сумму {word} в USDT:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]])
+        )
+        await call.answer()
+
+    @dp.message(AdminStates.waiting_for_balance_amount)
+    async def bal_change_finish(message: types.Message, state: FSMContext):
+        try:
+            amount = float(message.text.strip())
+            if amount <= 0: raise ValueError
+        except:
+            return await message.answer("❌ Введите корректную сумму.")
+        data = await state.get_data()
+        action = data.get("bal_action")
+        t_id = data.get("bal_uid")
+        if action == "add":
+            await db.db_execute("UPDATE balances SET balance=balance+$1 WHERE user_id=$2", amount, t_id)
+            await message.answer(f"✅ Баланс юзера <code>{t_id}</code> пополнен на <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
+        else:
+            await db.db_execute("UPDATE balances SET balance=GREATEST(balance-$1, 0) WHERE user_id=$2", amount, t_id)
+            await message.answer(f"✅ С баланса юзера <code>{t_id}</code> списано <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
         await state.clear()
         await send_admin_menu(message)
 
