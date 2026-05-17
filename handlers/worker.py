@@ -312,6 +312,11 @@ def register_worker(dp, bot):
         if not row or row["worker_id"] is None:
             return await call.answer("❌ Нет доступа", show_alert=True)
 
+        try:
+            await call.message.delete()
+        except:
+            pass
+
         worker_id = row["worker_id"]
         order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
         amount = float(order["amount"]) if order else 0.0
@@ -340,9 +345,14 @@ def register_worker(dp, bot):
     @dp.callback_query(F.data.startswith("send_code_"))
     async def send_code(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[2])
-        order = await db.db_fetchone("SELECT id FROM orders WHERE id=$1 AND worker_id=$2", order_id, call.from_user.id)
+        order = await db.db_fetchone(
+            "SELECT id, worker_message_id FROM orders WHERE id=$1 AND worker_id=$2", order_id, call.from_user.id
+        )
         if not order:
             return await call.answer("❌ Нет доступа", show_alert=True)
+        # Проверяем что клиент запросил код (worker_message_id обновляется при запросе)
+        if not order["worker_message_id"]:
+            return await call.answer("⏳ Клиент ещё не запросил код", show_alert=True)
         await state.set_state(WorkerStates.waiting_for_code)
         try:
             await call.message.delete()
