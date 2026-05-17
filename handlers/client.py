@@ -333,9 +333,15 @@ def register_client(dp, bot):
             try:
                 await bot.send_message(
                     client_id,
-                    f"🆘 <b>Воркер открыл спор по заявке #{order_id}</b>\n\n"
-                    f"📝 Причина: {reason}\n\n"
-                    f"⏳ Ожидайте решения администратора. Средства заморожены.",
+                    f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n"
+                    f"--------------------------\n"
+                    f"🆔 <b>Заявка:</b> #{order_id}\n"
+                    f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
+                    f"👤 <b>Клиент:</b> <code>{client_id}</code>\n"
+                    f"👷 <b>Воркер:</b> <code>{uid}</code>\n"
+                    f"--------------------------\n"
+                    f"📝 <b>Причина:</b> {reason}\n\n"
+                    f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>",
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
