@@ -31,6 +31,16 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
         f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
     )
 
+def dispute_client_text(order_id, amount, reason, extra=""):
+    """Текст спора для клиента — обновляется по мере прохождения флоу"""
+    return (
+        f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
+        f"🆔 <b>Заявка:</b> #{order_id}\n"
+        f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
+        f"{extra}"
+        f"📝 <b>Причина:</b> {reason}\n\n"
+        f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
+    )
 
 def register_worker(dp, bot):
 
@@ -85,7 +95,6 @@ def register_worker(dp, bot):
 
     @dp.callback_query(F.data == "lk_available")
     async def lk_active(call: types.CallbackQuery):
-        uid = call.from_user.id
         orders = await db.db_fetchall(
             "SELECT id, amount, status FROM orders WHERE status='NEW' ORDER BY id DESC LIMIT 20"
         )
@@ -244,40 +253,85 @@ def register_worker(dp, bot):
             card_id, uid
         )
         order = await db.db_fetchone(
-            "SELECT user_id, amount, client_message_id, total_usdt FROM orders WHERE id=$1 AND worker_id=$2",
+            "SELECT user_id, amount, client_message_id, total_usdt, status FROM orders WHERE id=$1 AND worker_id=$2",
             order_id, uid
         )
         if not card or not order:
             return await call.answer("❌ Ошибка данных", show_alert=True)
 
-        new_msg = await bot.send_message(
-            chat_id=order["user_id"],
-            text=f"🎉 Заявка #{order_id}\n\n"
-                 f"💳 Услуга: Карта под оплату\n"
-                 f"💰 Сумма: {float(order['amount']):.2f} RUB\n\n"
-                 f"📊 Статус: 🟢 В работе\n\n"
-                 f"💳 Реквизиты для оплаты:\n"
-                 f"🏦 Банк: {card['bank']}\n"
-                 f"💳 Номер карты: <code>{card['card_number']}</code>\n"
-                 f"📅 Срок: {card['expiry']}\n"
-                 f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
-                 f"⏳ Запросите код для успешной оплаты",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
-            ])
+        user_id = order["user_id"]
+        amount = float(order["amount"])
+        total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
+        status = order["status"]
+
+        req_extra = (
+            f"\n💳 <b>Реквизиты для оплаты:</b>\n"
+            f"🏦 Банк: {card['bank']}\n"
+            f"💳 Номер карты: <code>{card['card_number']}</code>\n"
+            f"📅 Срок: {card['expiry']}\n"
+            f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
         )
-        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
-        try:
-            await bot.delete_message(order["user_id"], order["client_message_id"])
-        except Exception as e:
-            logger.error(f"[req_card] delete error: {e}")
+
+        if status == "DISPUTE":
+            # Получаем причину из БД
+            d_row = await db.db_fetchone("SELECT dispute_reason, client_message_id FROM orders WHERE id=$1", order_id)
+            d_reason = d_row["dispute_reason"] if d_row and d_row["dispute_reason"] else "—"
+            d_client_msg_id = d_row["client_message_id"] if d_row else None
+            new_text = (
+                f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
+                f"🆔 <b>Заявка:</b> #{order_id}\n"
+                f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
+                f"💳 <b>Реквизиты для оплаты:</b>\n"
+                f"🏦 Банк: {card['bank']}\n"
+                f"💳 Номер карты: <code>{card['card_number']}</code>\n"
+                f"📅 Срок: {card['expiry']}\n"
+                f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
+                f"📝 <b>Причина:</b> {d_reason}\n\n"
+                f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
+            )
+            new_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+            ])
+            # Удаляем старое и отправляем новое
+            if d_client_msg_id:
+                try:
+                    await bot.delete_message(chat_id=user_id, message_id=d_client_msg_id)
+                except:
+                    pass
+            new_dispute_msg = await bot.send_message(chat_id=user_id, text=new_text, parse_mode="HTML", reply_markup=new_kb)
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_dispute_msg.message_id, order_id)
+        else:
+            # Обычный флоу
+            new_msg = await bot.send_message(
+                chat_id=user_id,
+                text=f"🎉 Заявка #{order_id}\n\n"
+                     f"💳 Услуга: Карта под оплату\n"
+                     f"💰 Сумма: {amount:.2f} RUB\n\n"
+                     f"📊 Статус: 🟢 В работе\n\n"
+                     f"💳 Реквизиты для оплаты:\n"
+                     f"🏦 Банк: {card['bank']}\n"
+                     f"💳 Номер карты: <code>{card['card_number']}</code>\n"
+                     f"📅 Срок: {card['expiry']}\n"
+                     f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
+                     f"⏳ Запросите код для успешной оплаты",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
+                ])
+            )
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
+            try:
+                await bot.delete_message(user_id, order["client_message_id"])
+            except Exception as e:
+                logger.error(f"[req_card] delete error: {e}")
 
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
-        total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
         worker_msg = await call.message.answer(
             f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
-            f"{order_info(order_id, float(order['amount']), total_usdt)}\n\n"
+            f"{order_info(order_id, amount, total_usdt)}\n\n"
             f"⏳ Ожидаем запрос кода от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -322,7 +376,6 @@ def register_worker(dp, bot):
         amount = float(order["amount"]) if order else 0.0
         total_usdt = float(order["total_usdt"]) if order and order["total_usdt"] else 0.0
 
-        # Отправляем клиенту новое сообщение со статусом
         new_client_msg = await bot.send_message(
             call.from_user.id,
             f"🎉 Заявка #{order_id}\n\n"
@@ -363,7 +416,6 @@ def register_worker(dp, bot):
         )
         if not order:
             return await call.answer("❌ Нет доступа", show_alert=True)
-        # Проверяем что клиент запросил код (worker_message_id обновляется при запросе)
         if not order["worker_message_id"]:
             return await call.answer("⏳ Клиент ещё не запросил код", show_alert=True)
         await state.set_state(WorkerStates.waiting_for_code)
@@ -382,7 +434,7 @@ def register_worker(dp, bot):
         ask_code_msg_id = data.get("ask_code_msg_id")
         code = message.text.strip()
 
-        row = await db.db_fetchone("SELECT user_id, amount, total_usdt, client_message_id FROM orders WHERE id=$1", order_id)
+        row = await db.db_fetchone("SELECT user_id, amount, total_usdt, client_message_id, status FROM orders WHERE id=$1", order_id)
         if not row:
             await state.clear()
             return await message.answer("❌ Ошибка: заявка не найдена")
@@ -391,6 +443,7 @@ def register_worker(dp, bot):
         amount = float(row["amount"])
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         client_msg_id = row["client_message_id"]
+        status = row["status"]
 
         if ask_code_msg_id:
             try:
@@ -402,26 +455,70 @@ def register_worker(dp, bot):
         except:
             pass
 
-        new_msg = await bot.send_message(
-            chat_id=user_id,
-            text=f"🎉 Заявка #{order_id}\n\n"
-                 f"🆔 ID: #{order_id}\n"
-                 f"💳 Услуга: Карта под оплату\n"
-                 f"💰 Сумма: {amount:.2f} RUB\n\n"
-                 f"📊 Статус: 🟢 В работе\n\n"
-                 f"🔐 Код подтверждения: <code>{code}</code>\n\n"
-                 f"⏳ Нажмите кнопку ниже, если оплата прошла успешно",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        if status == "DISPUTE":
+            # Получаем причину и реквизиты из БД
+            d_row = await db.db_fetchone(
+                "SELECT dispute_reason, client_message_id FROM orders WHERE id=$1", order_id
+            )
+            d_reason = d_row["dispute_reason"] if d_row and d_row["dispute_reason"] else "—"
+            d_client_msg_id = d_row["client_message_id"] if d_row else None
+            # Пытаемся получить реквизиты последней отправленной карты
+            last_card = await db.db_fetchall(
+                "SELECT card_number, expiry, cvv, bank FROM cards WHERE worker_id=(SELECT worker_id FROM orders WHERE id=$1) LIMIT 1", order_id
+            )
+            card_block = ""
+            if last_card:
+                c = last_card[0]
+                card_block = (
+                    f"💳 <b>Реквизиты для оплаты:</b>\n"
+                    f"🏦 Банк: {c['bank']}\n"
+                    f"💳 Номер карты: <code>{c['card_number']}</code>\n"
+                    f"📅 Срок: {c['expiry']}\n"
+                    f"🔐 CVV: <code>{c['cvv']}</code>\n\n"
+                )
+            new_text = (
+                f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
+                f"🆔 <b>Заявка:</b> #{order_id}\n"
+                f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
+                f"{card_block}"
+                f"🔐 <b>Код подтверждения:</b> <code>{code}</code>\n\n"
+                f"📝 <b>Причина:</b> {d_reason}\n\n"
+                f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
+            )
+            new_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
-                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")]
+                [InlineKeyboardButton(text="📄 Написать", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
-        )
-        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
-        try:
-            await bot.delete_message(chat_id=user_id, message_id=client_msg_id)
-        except Exception as e:
-            logger.error(f"[process_code] delete error: {e}")
+            if d_client_msg_id:
+                try:
+                    await bot.delete_message(chat_id=user_id, message_id=d_client_msg_id)
+                except:
+                    pass
+            new_dispute_msg = await bot.send_message(chat_id=user_id, text=new_text, parse_mode="HTML", reply_markup=new_kb)
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_dispute_msg.message_id, order_id)
+        else:
+            # Обычный флоу
+            new_msg = await bot.send_message(
+                chat_id=user_id,
+                text=f"🎉 Заявка #{order_id}\n\n"
+                     f"🆔 ID: #{order_id}\n"
+                     f"💳 Услуга: Карта под оплату\n"
+                     f"💰 Сумма: {amount:.2f} RUB\n\n"
+                     f"📊 Статус: 🟢 В работе\n\n"
+                     f"🔐 Код подтверждения: <code>{code}</code>\n\n"
+                     f"⏳ Нажмите кнопку ниже, если оплата прошла успешно",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")]
+                ])
+            )
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
+            try:
+                await bot.delete_message(chat_id=user_id, message_id=client_msg_id)
+            except Exception as e:
+                logger.error(f"[process_code] delete error: {e}")
 
         worker_msg = await message.answer(
             f"✅ Код отправлен клиенту\n\n"
