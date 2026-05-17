@@ -189,13 +189,15 @@ def register_client(dp, bot):
 
         await state.clear()
         dispute_text = (
-            f"🆘 <b>СТАТУС: ОТКРЫТ СПОР</b>\n"
-            f"──────────────────\n"
+            f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n"
+            f"--------------------------\n"
             f"🆔 <b>Заявка:</b> #{order_id}\n"
             f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
+            f"👤 <b>Клиент:</b> <code>{uid}</code>\n"
             f"👷 <b>Воркер:</b> <code>{worker_id}</code>\n"
-            f"──────────────────\n"
-            f"📊 <i>Администратор уведомлён. Ожидайте решения. Скриншот и причина переданы в арбитраж.</i>"
+            f"--------------------------\n"
+            f"📝 <b>Причина:</b> {reason}\n\n"
+            f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
         )
         dispute_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
@@ -347,13 +349,15 @@ def register_client(dp, bot):
 
         await state.clear()
         dispute_text_w = (
-            f"🆘 <b>СТАТУС: ОТКРЫТ СПОР</b>\n"
-            f"──────────────────\n"
+            f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n"
+            f"--------------------------\n"
             f"🆔 <b>Заявка:</b> #{order_id}\n"
             f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
             f"👤 <b>Клиент:</b> <code>{client_id}</code>\n"
-            f"──────────────────\n"
-            f"📊 <i>Администратор уведомлён. Ожидайте решения. Скриншот и причина переданы в арбитраж.</i>"
+            f"👷 <b>Воркер:</b> <code>{uid}</code>\n"
+            f"--------------------------\n"
+            f"📝 <b>Причина:</b> {reason}\n\n"
+            f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
         )
         dispute_kb_w = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
