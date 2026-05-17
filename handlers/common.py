@@ -57,6 +57,11 @@ def register_common(dp, bot: Bot):
             file_id = message.photo[-1].file_id
             await message.answer(f"file_id:\n<code>{file_id}</code>", parse_mode="HTML")
 
+@dp.message(F.sticker)
+async def get_sticker_id(message: types.Message):
+    if message.from_user.id == ADMIN_ID:
+        await message.answer(f"sticker_id:\n<code>{message.sticker.file_id}</code>", parse_mode="HTML")
+
     CHANNEL_ID = "@sendpaid_channel"
 
     async def check_subscription(uid: int) -> bool:
