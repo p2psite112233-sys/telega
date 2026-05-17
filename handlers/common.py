@@ -318,8 +318,11 @@ def register_common(dp, bot: Bot):
             return await message.answer(
                 f"❌ Недостаточно средств на балансе!\n\n"
                 f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                f"💰 Ваш баланс: {balance:.2f} USDT\n\n"
-                f"Пополните баланс через 🤑 Пополнить баланс"
+                f"💰 Ваш баланс: {balance:.2f} USDT",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+                ])
             )
 
         row = await db.db_fetchone(
