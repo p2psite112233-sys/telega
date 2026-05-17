@@ -248,6 +248,10 @@ def register_common(dp, bot: Bot):
 
     @dp.callback_query(F.data == "client_card")
     async def order_start(call: types.CallbackQuery, state: FSMContext):
+        try:
+            await call.message.delete()
+        except:
+            pass
         await call.message.answer_photo(
             photo=CARD_BANNER_FILE_ID,
             caption=(
