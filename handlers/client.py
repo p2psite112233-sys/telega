@@ -130,6 +130,7 @@ def register_client(dp, bot):
         & ~F.data.startswith("worker_confirm_")
         & ~F.data.startswith("worker_apply")
         & ~F.data.startswith("take_")
+        & ~F.data.startswith("lk_available")
         & ~F.data.in_({"card_unique_yes", "card_unique_no", "client_support"})
     )
     async def lk_buttons(call: types.CallbackQuery, state: FSMContext):
