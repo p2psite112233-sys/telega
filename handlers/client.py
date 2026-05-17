@@ -40,6 +40,48 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 
 def register_client(dp, bot):
 
+    @dp.callback_query(F.data.startswith("dispute_"))
+    async def dispute_order(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[1])
+        uid = call.from_user.id
+        username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
+        row = await db.db_fetchone("SELECT status, worker_id FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
+        if not row:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+        if row["status"] not in ("NEW", "IN_PROGRESS"):
+            return await call.answer("❌ Спор недоступен для этой заявки", show_alert=True)
+
+        # Меняем статус на DISPUTE — блокируем воркера
+        result = await db.db_execute(
+            "UPDATE orders SET status='DISPUTE' WHERE id=$1 AND status IN ('NEW', 'IN_PROGRESS')", order_id
+        )
+        if "UPDATE 0" in result:
+            return await call.answer("❌ Статус заявки уже изменён", show_alert=True)
+
+        from config import ADMIN_ID
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
+                f"👤 Клиент: {username} (<code>{uid}</code>)\n"
+                f"👷 Воркер: <code>{row['worker_id']}</code>\n"
+                f"📊 Статус изменён на: DISPUTE",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"[dispute] notify error: {e}")
+
+        try:
+            await call.message.edit_text(
+                f"🆘 <b>Спор по заявке #{order_id} открыт</b>\n\n"
+                f"Администратор получил уведомление и разберётся в ближайшее время.\n"
+                f"Средства заморожены до решения спора.",
+                parse_mode="HTML"
+            )
+        except:
+            pass
+        await call.answer("✅ Спор открыт!", show_alert=True)
+
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
@@ -52,10 +94,19 @@ def register_client(dp, bot):
             return await call.answer("❌ Нельзя отменить завершённую заявку", show_alert=True)
         if status not in ("NEW", "IN_PROGRESS"):
             return await call.answer("❌ Заявку нельзя отменить", show_alert=True)
+
+        # Сначала меняем статус — защита от race condition
+        result = await db.db_execute(
+            "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status IN ('NEW', 'IN_PROGRESS')", order_id
+        )
+        if "UPDATE 0" in result:
+            return await call.answer("❌ Заявка уже отменена или завершена", show_alert=True)
+
+        # Только после успешного UPDATE возвращаем деньги
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         worker_id = row["worker_id"]
         await db.unfreeze_back(uid, total_usdt)
-        await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
+
         try:
             await call.message.edit_text(f"❌ Заявка #{order_id} отменена\n\n💰 Средства возвращены на баланс")
         except Exception as e:
