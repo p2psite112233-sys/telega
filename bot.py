@@ -17,13 +17,15 @@ from handlers.worker import register_worker
 from handlers.client import register_client
 from handlers.admin import register_admin
 from handlers.apply import register_apply
+from handlers.dispute import register_dispute
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 # Порядок важен!
 register_admin(dp, bot)
-register_client(dp, bot)   # Первым — чтобы FSM фото спора не перехватывал common
+register_dispute(dp, bot)  # Спор первым — FSM фото
+register_client(dp, bot)
 register_apply(dp, bot)
 register_worker(dp, bot)
 register_common(dp, bot)
