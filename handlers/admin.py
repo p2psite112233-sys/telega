@@ -19,7 +19,6 @@ class AdminStates(StatesGroup):
 
 def register_admin(dp, bot: Bot):
 
-    # --- ГЛАВНОЕ МЕНЮ ---
     async def send_admin_menu(message: types.Message):
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
@@ -50,7 +49,6 @@ def register_admin(dp, bot: Bot):
         await send_admin_menu(call.message)
         await call.answer()
 
-    # --- БЛОК 1: СТАТИСТИКА ---
     @dp.callback_query(F.data == "adm_stats_menu")
     async def stats_menu(call: types.CallbackQuery):
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -70,7 +68,6 @@ def register_admin(dp, bot: Bot):
         now = datetime.now()
         since = now - (timedelta(days=1) if period == "day" else timedelta(weeks=1) if period == "week" else timedelta(days=30))
         label = "день" if period == "day" else "неделю" if period == "week" else "месяц"
-
         try:
             since_naive = since.replace(tzinfo=None)
             orders_rows = await db.db_fetchall("SELECT status, total_usdt, amount FROM orders WHERE created_at >= $1", since_naive)
@@ -80,30 +77,23 @@ def register_admin(dp, bot: Bot):
                     done_count += 1
                     turnover_usdt += float(r['total_usdt'] or 0)
                     turnover_rub += float(r['amount'] or 0)
-
             new_users = await db.db_fetchone("SELECT COUNT(*) as count FROM balances WHERE created_at >= $1", since_naive)
             total_users = await db.db_fetchone("SELECT COUNT(*) as count FROM balances")
             profit_row = await db.db_fetchone("SELECT SUM(amount) as total FROM bot_profit WHERE created_at >= $1", since_naive)
             net_profit = float(profit_row['total'] or 0) if profit_row and profit_row['total'] else 0.0
-
             text = (
                 f"📊 <b>Статистика за {label}</b>\n\n"
-                f"👥 <b>Аудитория:</b>\n"
-                f"• Новых юзеров: <b>{new_users['count']}</b>\n"
-                f"• Всего в базе: <b>{total_users['count']}</b>\n\n"
-                f"📋 <b>Активность:</b>\n"
-                f"• Успешных сделок: <b>{done_count}</b>\n\n"
-                f"💰 <b>Финансы:</b>\n"
-                f"• Оборот: <code>{turnover_usdt:.4f}</code> USDT (<code>{turnover_rub:.0f}</code> RUB)\n"
-                f"• Прибыль бота: <b>{net_profit:.4f}</b> USDT"
+                f"👥 <b>Аудитория:</b>\n• Новых юзеров: <b>{new_users['count']}</b>\n• Всего в базе: <b>{total_users['count']}</b>\n\n"
+                f"📋 <b>Активность:</b>\n• Успешных сделок: <b>{done_count}</b>\n\n"
+                f"💰 <b>Финансы:</b>\n• Оборот: <code>{turnover_usdt:.4f}</code> USDT (<code>{turnover_rub:.0f}</code> RUB)\n• Прибыль бота: <b>{net_profit:.4f}</b> USDT"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_stats_menu")]])
             await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except:
             await call.answer("Ошибка в статистике", show_alert=True)
+            return
         await call.answer()
 
-    # --- БЛОК 2: КАССА (РАСШИРЕННАЯ) ---
     @dp.callback_query(F.data == "adm_finance_menu")
     async def finance_menu(call: types.CallbackQuery):
         try:
@@ -111,13 +101,11 @@ def register_admin(dp, bot: Bot):
             turnover_data = await db.db_fetchone("SELECT SUM(total_usdt) as usdt, SUM(amount) as rub FROM orders WHERE status IN ('DONE', 'SUCCESS', 'COMPLETED')")
             deposits = await db.db_fetchone("SELECT SUM(amount) as total FROM invoices WHERE status IN ('paid', 'SUCCESS')")
             withdraws = await db.db_fetchone("SELECT SUM(amount) as total FROM withdrawals")
-            
             p_val = float(profit['total'] or 0)
             t_usdt = float(turnover_data['usdt'] or 0)
             t_rub = float(turnover_data['rub'] or 0)
             d_val = float(deposits['total'] or 0)
             w_val = float(withdraws['total'] or 0)
-
             text = (
                 "💰 <b>Финансовый аудит</b>\n\n"
                 f"💵 <b>Прибыль бота:</b> <code>{p_val:.4f}</code> USDT\n"
@@ -131,9 +119,9 @@ def register_admin(dp, bot: Bot):
             await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except:
             await call.answer("Ошибка в кассе", show_alert=True)
+            return
         await call.answer()
 
-    # --- БЛОК 3: ВОРКЕРЫ ---
     @dp.callback_query(F.data == "adm_workers_manage")
     async def workers_manage(call: types.CallbackQuery):
         count = await db.db_fetchone("SELECT COUNT(*) FROM workers")
@@ -160,6 +148,7 @@ def register_admin(dp, bot: Bot):
             await call.message.answer(f"👤 Заявка от: <code>{app['user_id']}</code>", reply_markup=kb, parse_mode="HTML")
         await call.answer()
 
+    # Хендлер для кнопок из adm_view_apps (app_accept_ / app_decline_)
     @dp.callback_query(F.data.startswith("app_"))
     async def process_app(call: types.CallbackQuery):
         parts = call.data.split("_")
@@ -173,7 +162,29 @@ def register_admin(dp, bot: Bot):
             await call.message.edit_text(f"✅ Юзер {t_id} принят")
         else:
             await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", t_id)
+            try: await bot.send_message(t_id, "❌ Ваша заявка отклонена.")
+            except: pass
             await call.message.edit_text(f"❌ Юзер {t_id} отклонен")
+        await call.answer()
+
+    # Хендлер для кнопок из apply.py (adm_ap_yes_ / adm_ap_no_)
+    @dp.callback_query(F.data.startswith("adm_ap_"))
+    async def process_apply_decision(call: types.CallbackQuery):
+        parts = call.data.split("_")
+        action = parts[2]  # yes / no
+        t_id = int(parts[3])
+        if action == "yes":
+            await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
+            await db.db_execute("UPDATE worker_applications SET status='accepted' WHERE user_id=$1", t_id)
+            set_role(t_id, "worker")
+            try: await bot.send_message(t_id, "🎉 Ваша заявка одобрена! Теперь вы воркер.")
+            except: pass
+            await call.message.edit_text(f"✅ Юзер <code>{t_id}</code> принят в воркеры.", parse_mode="HTML")
+        else:
+            await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", t_id)
+            try: await bot.send_message(t_id, "❌ Ваша заявка отклонена.")
+            except: pass
+            await call.message.edit_text(f"❌ Юзер <code>{t_id}</code> отклонён.", parse_mode="HTML")
         await call.answer()
 
     @dp.callback_query(F.data == "adm_add_worker_manual")
@@ -193,7 +204,6 @@ def register_admin(dp, bot: Bot):
             await send_admin_menu(message)
         except: await message.answer("Ошибка в ID.")
 
-    # --- БЛОК 4: РАССЫЛКА ---
     @dp.callback_query(F.data == "adm_broadcast")
     async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.waiting_for_broadcast_text)
@@ -205,7 +215,6 @@ def register_admin(dp, bot: Bot):
         query = "SELECT user_id FROM balances UNION SELECT user_id FROM workers UNION SELECT user_id FROM invoices"
         rows = await db.db_fetchall(query)
         u_ids = list(set([r['user_id'] for r in rows]))
-        
         status_msg = await message.answer(f"🚀 Рассылка на {len(u_ids)} чел...")
         sent = 0
         for uid in u_ids:
@@ -214,7 +223,6 @@ def register_admin(dp, bot: Bot):
                 sent += 1
                 await asyncio.sleep(0.05)
             except: pass
-            
         await status_msg.edit_text(f"✅ Рассылка завершена. Получили: {sent}")
         await state.clear()
         await send_admin_menu(message)
