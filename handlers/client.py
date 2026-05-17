@@ -39,6 +39,18 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 
+def dispute_text_base(order_id, amount, reason, extra=""):
+    """Базовый текст спора без ID сторон"""
+    return (
+        f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
+        f"🆔 <b>Заявка:</b> #{order_id}\n"
+        f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
+        f"{extra}"
+        f"📝 <b>Причина:</b> {reason}\n\n"
+        f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
+    )
+
+
 class DisputeStates(StatesGroup):
     waiting_for_reason = State()
     waiting_for_screenshot = State()
@@ -63,8 +75,7 @@ def register_client(dp, bot):
         await state.update_data(dispute_order_id=order_id, dispute_worker_id=row["worker_id"], msg_to_edit=call.message.message_id)
         try:
             msg = await call.message.edit_text(
-                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\n"
-                f"Шаг 1/2: Опишите причину спора — что пошло не так?",
+                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора — что пошло не так?",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -106,8 +117,7 @@ def register_client(dp, bot):
             except:
                 pass
         msg = await message.answer(
-            "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\n"
-            "Прикрепите скрин подтверждения (или любое доказательство).",
+            "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите скрин подтверждения (или любое доказательство).",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -126,7 +136,6 @@ def register_client(dp, bot):
         username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
         photo_id = message.photo[-1].file_id
 
-        # Удаляем сообщение шага 2 и скриншот
         try:
             await message.delete()
         except:
@@ -137,9 +146,8 @@ def register_client(dp, bot):
             except:
                 pass
 
-        # Меняем статус на DISPUTE и записываем кто открыл
         result = await db.db_execute(
-            "UPDATE orders SET status='DISPUTE', dispute_opened_by='client' WHERE id=$1 AND status='IN_PROGRESS'", order_id
+            "UPDATE orders SET status='DISPUTE', dispute_opened_by='client', dispute_reason=$2 WHERE id=$1 AND status='IN_PROGRESS'", order_id, reason
         )
         if "UPDATE 0" in result:
             await state.clear()
@@ -175,9 +183,7 @@ def register_client(dp, bot):
             try:
                 await bot.send_message(
                     worker_id,
-                    f"🆘 <b>Клиент открыл спор по заявке #{order_id}</b>\n\n"
-                    f"📝 Причина: {reason}\n\n"
-                    f"⏳ Ожидайте решения администратора. Средства заморожены.",
+                    dispute_text_base(order_id, amount, reason),
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="✍️ Написать сообщение", url="https://t.me/usudhsuhd")],
@@ -188,18 +194,8 @@ def register_client(dp, bot):
                 pass
 
         await state.clear()
-        dispute_text = (
-            f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n"
-            f"--------------------------\n"
-            f"🆔 <b>Заявка:</b> #{order_id}\n"
-            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-            f"👤 <b>Клиент:</b> <code>{uid}</code>\n"
-            f"👷 <b>Воркер:</b> <code>{worker_id}</code>\n"
-            f"--------------------------\n"
-            f"📝 <b>Причина:</b> {reason}\n\n"
-            f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
-        )
-        dispute_kb = InlineKeyboardMarkup(inline_keyboard=[
+        d_text = dispute_text_base(order_id, amount, reason)
+        d_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
             [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
         ])
@@ -208,15 +204,15 @@ def register_client(dp, bot):
                 await bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=data["msg_to_edit"],
-                    text=dispute_text,
-                    reply_markup=dispute_kb,
+                    text=d_text,
+                    reply_markup=d_kb,
                     parse_mode="HTML"
                 )
             except Exception as e:
                 logger.error(f"edit dispute msg error: {e}")
-                await message.answer(dispute_text, reply_markup=dispute_kb, parse_mode="HTML")
+                await message.answer(d_text, reply_markup=d_kb, parse_mode="HTML")
         else:
-            await message.answer(dispute_text, reply_markup=dispute_kb, parse_mode="HTML")
+            await message.answer(d_text, reply_markup=d_kb, parse_mode="HTML")
 
     # --- СПОР ВОРКЕРА ---
     @dp.callback_query(F.data.startswith("worker_dispute_"))
@@ -233,8 +229,7 @@ def register_client(dp, bot):
         await state.update_data(dispute_order_id=order_id, dispute_client_id=row["user_id"], msg_to_edit=call.message.message_id)
         try:
             msg = await call.message.edit_text(
-                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\n"
-                f"Шаг 1/2: Опишите причину спора.",
+                f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -297,7 +292,7 @@ def register_client(dp, bot):
                 pass
 
         result = await db.db_execute(
-            "UPDATE orders SET status='DISPUTE', dispute_opened_by='worker' WHERE id=$1 AND status='IN_PROGRESS'", order_id
+            "UPDATE orders SET status='DISPUTE', dispute_opened_by='worker', dispute_reason=$2 WHERE id=$1 AND status='IN_PROGRESS'", order_id, reason
         )
         if "UPDATE 0" in result:
             await state.clear()
@@ -333,15 +328,7 @@ def register_client(dp, bot):
             try:
                 await bot.send_message(
                     client_id,
-                    f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n"
-                    f"--------------------------\n"
-                    f"🆔 <b>Заявка:</b> #{order_id}\n"
-                    f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-                    f"👤 <b>Клиент:</b> <code>{client_id}</code>\n"
-                    f"👷 <b>Воркер:</b> <code>{uid}</code>\n"
-                    f"--------------------------\n"
-                    f"📝 <b>Причина:</b> {reason}\n\n"
-                    f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>",
+                    dispute_text_base(order_id, amount, reason),
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
@@ -354,18 +341,8 @@ def register_client(dp, bot):
                 pass
 
         await state.clear()
-        dispute_text_w = (
-            f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n"
-            f"--------------------------\n"
-            f"🆔 <b>Заявка:</b> #{order_id}\n"
-            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-            f"👤 <b>Клиент:</b> <code>{client_id}</code>\n"
-            f"👷 <b>Воркер:</b> <code>{uid}</code>\n"
-            f"--------------------------\n"
-            f"📝 <b>Причина:</b> {reason}\n\n"
-            f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
-        )
-        dispute_kb_w = InlineKeyboardMarkup(inline_keyboard=[
+        d_text_w = dispute_text_base(order_id, amount, reason)
+        d_kb_w = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
             [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
@@ -376,15 +353,15 @@ def register_client(dp, bot):
                 await bot.edit_message_text(
                     chat_id=message.chat.id,
                     message_id=data["msg_to_edit"],
-                    text=dispute_text_w,
-                    reply_markup=dispute_kb_w,
+                    text=d_text_w,
+                    reply_markup=d_kb_w,
                     parse_mode="HTML"
                 )
             except Exception as e:
                 logger.error(f"edit dispute msg error: {e}")
-                await message.answer(dispute_text_w, reply_markup=dispute_kb_w, parse_mode="HTML")
+                await message.answer(d_text_w, reply_markup=d_kb_w, parse_mode="HTML")
         else:
-            await message.answer(dispute_text_w, reply_markup=dispute_kb_w, parse_mode="HTML")
+            await message.answer(d_text_w, reply_markup=d_kb_w, parse_mode="HTML")
 
     @dp.callback_query(F.data.startswith("cancel_order_"))
     async def cancel_order(call: types.CallbackQuery):
@@ -448,7 +425,6 @@ def register_client(dp, bot):
         worker_balance = await db.get_balance(worker_id)
         worker_amount = round(amount_usdt + (total_usdt - amount_usdt) * 0.8, 4)
 
-        # Удаляем сообщение воркера "Ожидаем подтверждения"
         w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
         if w_row and w_row["worker_message_id"]:
             try:
