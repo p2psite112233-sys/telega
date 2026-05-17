@@ -129,10 +129,66 @@ def register_admin(dp, bot: Bot):
         text = f"👥 <b>Управление воркерами</b>\n\nВ штате: <b>{count['count']}</b>\nЗаявок: <b>{apps['count']}</b>"
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📨 Просмотр заявок", callback_data="adm_view_apps")],
+            [InlineKeyboardButton(text="👥 Все воркеры", callback_data="adm_list_workers")],
             [InlineKeyboardButton(text="➕ Добавить по ID", callback_data="adm_add_worker_manual")],
             [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
         ])
         await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await call.answer()
+
+    @dp.callback_query(F.data == "adm_list_workers")
+    async def list_workers(call: types.CallbackQuery):
+        workers = await db.db_fetchall("SELECT w.user_id FROM workers w ORDER BY w.user_id DESC LIMIT 20")
+        if not workers:
+            return await call.answer("👥 Воркеров нет", show_alert=True)
+        buttons = []
+        for w in workers:
+            uid = w['user_id']
+            try:
+                chat = await bot.get_chat(uid)
+                name = f"@{chat.username}" if chat.username else f"ID: {uid}"
+            except:
+                name = f"ID: {uid}"
+            buttons.append([InlineKeyboardButton(text=f"👤 {name}", callback_data=f"adm_worker_info_{uid}")])
+        buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_workers_manage")])
+        await call.message.edit_text("👥 <b>Список воркеров:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("adm_worker_info_"))
+    async def worker_info(call: types.CallbackQuery):
+        uid = int(call.data.split("_")[3])
+        try:
+            chat = await bot.get_chat(uid)
+            name = f"@{chat.username}" if chat.username else f"ID: {uid}"
+        except:
+            name = f"ID: {uid}"
+        done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
+        balance = await db.get_balance(uid)
+        text = (
+            f"👤 <b>Воркер {name}</b>\n"
+            f"ID: <code>{uid}</code>\n\n"
+            f"✅ Выполнено: {done['count']} заявок\n"
+            f"💰 Баланс: {balance:.2f} USDT"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔴 Снять с должности", callback_data=f"adm_fire_worker_{uid}")],
+            [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_list_workers")]
+        ])
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("adm_fire_worker_"))
+    async def fire_worker(call: types.CallbackQuery):
+        uid = int(call.data.split("_")[3])
+        await db.db_execute("DELETE FROM workers WHERE user_id=$1", uid)
+        from utils.shared import roles
+        roles.pop(uid, None)
+        try:
+            await bot.send_message(uid, "❌ Вы были сняты с должности воркера.")
+        except:
+            pass
+        await call.message.edit_text(f"✅ Воркер <code>{uid}</code> снят с должности.", parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_list_workers")]]))
         await call.answer()
 
     @dp.callback_query(F.data == "adm_view_apps")
@@ -157,12 +213,12 @@ def register_admin(dp, bot: Bot):
             await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
             await db.db_execute("UPDATE worker_applications SET status='accepted' WHERE user_id=$1", t_id)
             set_role(t_id, "worker")
-            try: await bot.send_message(t_id, "🎉 Ваша заявка одобрена!")
+            try: await bot.send_message(t_id, "🎉 Ваша заявка на роль оплатчика одобрена!\n\nЖелаем удачной работы и успешных начинаний!❤️")
             except: pass
             await call.message.edit_text(f"✅ Юзер {t_id} принят")
         else:
             await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", t_id)
-            try: await bot.send_message(t_id, "❌ Ваша заявка отклонена.")
+            try: await bot.send_message(t_id, "❌ Ваша заявка на роль оплатчика отклонена.\n\nПопробуйте подать заявку позже. Возможно мы пересмотрим решение.")
             except: pass
             await call.message.edit_text(f"❌ Юзер {t_id} отклонен")
         await call.answer()
@@ -177,12 +233,12 @@ def register_admin(dp, bot: Bot):
             await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
             await db.db_execute("UPDATE worker_applications SET status='accepted' WHERE user_id=$1", t_id)
             set_role(t_id, "worker")
-            try: await bot.send_message(t_id, "🎉 Ваша заявка одобрена! Теперь вы воркер.")
+            try: await bot.send_message(t_id, "🎉 Ваша заявка на роль оплатчика одобрена!\n\nЖелаем удачной работы и успешных начинаний!❤️")
             except: pass
             await call.message.edit_text(f"✅ Юзер <code>{t_id}</code> принят в воркеры.", parse_mode="HTML")
         else:
             await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", t_id)
-            try: await bot.send_message(t_id, "❌ Ваша заявка отклонена.")
+            try: await bot.send_message(t_id, "❌ Ваша заявка на роль оплатчика отклонена.\n\nПопробуйте подать заявку позже. Возможно мы пересмотрим решение.")
             except: pass
             await call.message.edit_text(f"❌ Юзер <code>{t_id}</code> отклонён.", parse_mode="HTML")
         await call.answer()
