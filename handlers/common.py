@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 import db
-from config import ADMIN_ID, BANNER_FILE_ID, CARD_BANNER_FILE_ID, ORDER_BANNER_FILE_ID
+from config import ADMIN_ID, BANNER_FILE_ID, CARD_BANNER_FILE_ID, ORDER_BANNER_FILE_ID, WELCOME_STICKER_ID
 from utils.crypto import crypto_get_rate, crypto_create_invoice, crypto_check_invoice
 from utils.cards import parse_card
 from utils.shared import get_role, set_role, workers
@@ -86,6 +86,7 @@ def register_common(dp, bot: Bot):
         if role not in ["worker", "admin"]:
             is_subscribed = await check_subscription(uid)
             if not is_subscribed:
+                await message.answer_sticker(WELCOME_STICKER_ID)
                 await message.answer(
                     "👋 Добро пожаловать в <b>Send$Paid</b>!\n\n"
                     "Для использования бота необходимо подписаться на наш канал.",
