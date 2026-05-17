@@ -31,17 +31,6 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
         f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
     )
 
-def dispute_client_text(order_id, amount, reason, extra=""):
-    """Текст спора для клиента — обновляется по мере прохождения флоу"""
-    return (
-        f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
-        f"🆔 <b>Заявка:</b> #{order_id}\n"
-        f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-        f"{extra}"
-        f"📝 <b>Причина:</b> {reason}\n\n"
-        f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
-    )
-
 def register_worker(dp, bot):
 
     @dp.message(F.text == "/lk")
