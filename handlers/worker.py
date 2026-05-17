@@ -78,13 +78,13 @@ def register_worker(dp, bot):
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💸 Вывод", callback_data="lk_withdraw")],
-            [InlineKeyboardButton(text="🟢 Активные", callback_data="lk_active"),
+            [InlineKeyboardButton(text="🟢 Активные", callback_data="lk_available"),
              InlineKeyboardButton(text="📚 История", callback_data="lk_history")],
             [InlineKeyboardButton(text="💳 Карты", callback_data="lk_cards")]
         ])
         await message.answer_photo(photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
 
-    @dp.callback_query(F.data == "lk_active")
+    @dp.callback_query(F.data == "lk_available")
     async def lk_active(call: types.CallbackQuery):
         uid = call.from_user.id
         orders = await db.db_fetchall(
@@ -143,7 +143,7 @@ def register_worker(dp, bot):
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💸 Вывод", callback_data="lk_withdraw")],
-            [InlineKeyboardButton(text="📥 Заявки", callback_data="lk_active"),
+            [InlineKeyboardButton(text="📥 Заявки", callback_data="lk_available"),
              InlineKeyboardButton(text="📚 История", callback_data="lk_history")],
             [InlineKeyboardButton(text="💳 Карты", callback_data="lk_cards")]
         ])
