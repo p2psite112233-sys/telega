@@ -21,12 +21,12 @@ from handlers.apply import register_apply
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# Порядок важен — админ и apply первыми!
+# Порядок важен!
 register_admin(dp, bot)
-register_common(dp, bot)
+register_client(dp, bot)   # Первым — чтобы FSM фото спора не перехватывал common
 register_apply(dp, bot)
 register_worker(dp, bot)
-register_client(dp, bot)
+register_common(dp, bot)
 
 async def handle(request):
     return web.Response(text="Bot is running")
@@ -65,4 +65,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
- 
