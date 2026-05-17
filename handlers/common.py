@@ -273,6 +273,9 @@ def register_common(dp, bot: Bot):
 
     @dp.callback_query(F.data.in_({"card_unique_yes", "card_unique_no"}))
     async def order_unique_selected(call: types.CallbackQuery, state: FSMContext):
+        current = await state.get_state()
+        if current == ClientStates.waiting_for_order_amount:
+            return await call.answer("⏳ Уже обрабатывается", show_alert=False)
         unique = call.data == "card_unique_yes"
         await state.set_state(ClientStates.waiting_for_order_amount)
         extra = " (+5% за уникальность)" if unique else ""
@@ -288,7 +291,10 @@ def register_common(dp, bot: Bot):
                 f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
                 f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
             ),
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
+            ])
         )
         await state.update_data(unique=unique, sum_msg_id=msg.message_id)
         await call.answer()
