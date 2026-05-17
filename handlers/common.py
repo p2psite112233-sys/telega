@@ -23,6 +23,7 @@ class WorkerRegStates(StatesGroup):
     waiting_for_card_data = State()
     waiting_for_bank_name = State()
     waiting_for_experience = State()
+    waiting_for_extra_info = State()
     waiting_for_next_step = State()
 
 # --- КЛАВИАТУРЫ ---
