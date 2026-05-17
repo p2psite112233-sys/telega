@@ -403,8 +403,11 @@ def register_admin(dp, bot: Bot):
         try:
             await bot.send_message(row['user_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства возвращены на баланс.")
         except: pass
-        await call.message.edit_text(f"✅ Спор #{order_id} — средства возвращены клиенту.")
-        await call.answer()
+        try:
+            await call.message.delete()
+        except: pass
+        await call.message.answer(f"✅ Спор #{order_id} — средства возвращены клиенту.")
+        await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data.startswith("dispute_pay_worker_"))
     async def dispute_pay_worker(call: types.CallbackQuery):
@@ -420,8 +423,11 @@ def register_admin(dp, bot: Bot):
         try:
             await bot.send_message(row['user_id'], f"❌ Спор по заявке #{order_id} решён не в вашу пользу.")
         except: pass
-        await call.message.edit_text(f"✅ Спор #{order_id} — средства отправлены воркеру.")
-        await call.answer()
+        try:
+            await call.message.delete()
+        except: pass
+        await call.message.answer(f"✅ Спор #{order_id} — средства отправлены воркеру.")
+        await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data == "adm_disputes")
     async def active_disputes(call: types.CallbackQuery):
