@@ -265,7 +265,8 @@ def register_common(dp, bot: Bot):
                 [
                     InlineKeyboardButton(text="✅ Да (+5%)", callback_data="card_unique_yes"),
                     InlineKeyboardButton(text="❌ Нет", callback_data="card_unique_no")
-                ]
+                ],
+                [InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")]
             ])
         )
         await call.answer()
