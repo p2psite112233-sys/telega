@@ -57,17 +57,40 @@ def register_common(dp, bot: Bot):
             file_id = message.photo[-1].file_id
             await message.answer(f"file_id:\n<code>{file_id}</code>", parse_mode="HTML")
 
+    CHANNEL_ID = "@sendpaid_channel"
+
+    async def check_subscription(uid: int) -> bool:
+        try:
+            member = await bot.get_chat_member(CHANNEL_ID, uid)
+            return member.status not in ("left", "kicked")
+        except:
+            return False
+
     @dp.message(F.text == "/start")
     async def start(message: types.Message, state: FSMContext):
         await state.clear()
         uid = message.from_user.id
         role = get_role(uid)
 
-        # Регистрируем юзера в БД при первом старте
         await db.db_execute(
             "INSERT INTO balances (user_id, balance, frozen) VALUES ($1, 0, 0) ON CONFLICT DO NOTHING",
             uid
         )
+
+        # Проверка подписки (только для клиентов, не для воркеров/админов)
+        if role not in ["worker", "admin"]:
+            is_subscribed = await check_subscription(uid)
+            if not is_subscribed:
+                await message.answer(
+                    "👋 Добро пожаловать в <b>Send$Paid</b>!\n\n"
+                    "Для использования бота необходимо подписаться на наш канал.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="📢 Подписаться", url="https://t.me/sendpaid_channel")],
+                        [InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check_sub")]
+                    ])
+                )
+                return
 
         if role in ["worker", "admin"]:
             worker_text = (
@@ -115,6 +138,43 @@ def register_common(dp, bot: Bot):
         await message.answer_photo(photo=BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
 
     # --- ЛОГИКА ПОПОЛНЕНИЯ ---
+
+    @dp.callback_query(F.data == "check_sub")
+    async def check_sub(call: types.CallbackQuery, state: FSMContext):
+        uid = call.from_user.id
+        is_subscribed = await check_subscription(uid)
+        if not is_subscribed:
+            return await call.answer("❌ Вы ещё не подписались на канал!", show_alert=True)
+        await call.message.delete()
+        # Показываем главное меню
+        text = (
+            "<b>🏠 Send$Paid — Главное меню</b>\n\n"
+            "<blockquote>Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
+            "пополнить номер телефона или оплатить готовый QR-код.\n"
+            "Все этапы заявки фиксируются внутри сервиса.</blockquote>\n\n"
+            "💼 Комиссия сервиса: <b>20%</b> от суммы, но не меньше 30 RUB\n"
+            "🆕 Уникальная карта: дополнительно <b>+5%</b>\n"
+            "🔳 QR-оплата: скидка по комиссии <b>-8%</b>\n"
+            "⚡️ Работаем <b>24/7</b>"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
+                InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
+            ],
+            [
+                InlineKeyboardButton(text="📳 Пополнить номер", callback_data="client_phone"),
+                InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
+            ],
+            [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+            [
+                InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
+                InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
+            ],
+            [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")]
+        ])
+        await call.message.answer_photo(photo=BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
+        await call.answer()
 
     @dp.callback_query(F.data == "client_topup")
     async def topup_start(call: types.CallbackQuery, state: FSMContext):
