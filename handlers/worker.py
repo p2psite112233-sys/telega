@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 import db
-from config import PROFILE_BANNER_FILE_ID
+from config import PROFILE_BANNER_FILE_ID, BANNER_FILE_ID
 from utils.shared import get_role, workers
 from utils.crypto import crypto_get_rate
 
@@ -114,7 +114,7 @@ def register_worker(dp, bot):
         buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
 
         await call.message.answer_photo(
-            photo="AgACAgIAAxkBAAIC0WoG5sJR0bYbAdNbPaX4Db0fcbOIAALvEmsb1Hc4SDgCkVsM1xIhAQADAgADeQADOwQ",
+            photo=BANNER_FILE_ID,
             caption=(
                 "<b>📥 Доступные заявки</b>\n\n"
                 "<blockquote>Здесь отображаются все активные заявки от клиентов, которые ещё не взяты в работу.\n"
@@ -126,6 +126,35 @@ def register_worker(dp, bot):
         await call.answer()
 
     @dp.callback_query(F.data == "lk_home")
+    async def lk_home(call: types.CallbackQuery):
+        uid = call.from_user.id
+        username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
+        balance = await db.get_balance(uid)
+        w_done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
+        w_active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
+        text = (
+            f"🛠 <b>Профиль работника</b>\n"
+            f"Аккаунт: {username}\n\n"
+            f"💼 <b>Финансы</b>\n"
+            f"• Доступно: <b>{balance:.2f} USDT</b>\n\n"
+            f"📊 <b>Статистика</b>\n"
+            f"• Выполнено: {w_done['count']} шт\n"
+            f"• В работе: {w_active['count']} шт"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💸 Вывод", callback_data="lk_withdraw")],
+            [InlineKeyboardButton(text="📥 Заявки", callback_data="lk_active"),
+             InlineKeyboardButton(text="📚 История", callback_data="lk_history")],
+            [InlineKeyboardButton(text="💳 Карты", callback_data="lk_cards")]
+        ])
+        try:
+            await call.message.delete()
+        except:
+            pass
+        await call.message.answer_photo(photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("take_"))
     async def take(call: types.CallbackQuery):
         uid = call.from_user.id
         if get_role(uid) not in ["worker", "admin"]:
