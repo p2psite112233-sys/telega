@@ -1,19 +1,11 @@
-"""
-Точка входа. Весь код разбит по файлам:
-- config.py        — токены, константы
-- db.py            — PostgreSQL asyncpg пул
-- utils/cards.py   — парсер карт
-- utils/crypto.py  — CryptoBot API
-- handlers/common.py  — /start, /setworker, text_handler
-- handlers/worker.py  — /lk, заявки воркера
-- handlers/client.py  — кнопки клиента, оплата
-"""
 import asyncio
 import os
 import sys
 import aiohttp
 from aiohttp import web
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 
 sys.stdout.reconfigure(line_buffering=True)
 print("==> Starting bot...", flush=True)
@@ -24,15 +16,17 @@ from handlers.common import register_common, load_workers
 from handlers.worker import register_worker
 from handlers.client import register_client
 from handlers.admin import register_admin
+from handlers.apply import register_apply
 
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-register_client(dp, bot)
-register_worker(dp, bot)
+# Порядок важен — админ и apply первыми!
 register_admin(dp, bot)
 register_common(dp, bot)
-
+register_apply(dp, bot)
+register_worker(dp, bot)
+register_client(dp, bot)
 
 async def handle(request):
     return web.Response(text="Bot is running")
@@ -63,11 +57,11 @@ async def keep_alive():
             pass
 
 async def main():
-    await init_db()  # Инициализируем БД
-    await load_workers()  # Загружаем воркеров
+    await init_db()
+    await load_workers()
     asyncio.create_task(keep_alive())
-    await run_web()
-    await dp.start_polling(bot)
+    asyncio.create_task(run_web())
+    await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
