@@ -43,6 +43,7 @@ def dispute_client_kb(order_id):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
         [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
+        [InlineKeyboardButton(text="📄 Написать сообщение", callback_data="noop")],
         [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
         [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
     ])
@@ -189,6 +190,7 @@ def register_dispute(dp, bot):
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                         [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
+                        [InlineKeyboardButton(text="📄 Написать сообщение", callback_data="noop")],
                         [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
                         [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
                     ])
@@ -319,7 +321,8 @@ def register_dispute(dp, bot):
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
                         [InlineKeyboardButton(text="🔐 Запросить код", callback_data=f"request_code_{order_id}")],
-                        [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                        [InlineKeyboardButton(text="📄 Написать сообщение", callback_data="noop")],
+                        [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
                         [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                     ])
                 )
@@ -334,12 +337,17 @@ def register_dispute(dp, bot):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data="noop")],
                 [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ]),
             parse_mode="HTML"
         )
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
+
+    @dp.callback_query(F.data == "noop")
+    async def noop_handler(call: types.CallbackQuery):
+        await call.answer()
 
     # --- РЕШЕНИЕ СПОРА АДМИНОМ ---
     @dp.callback_query(F.data.startswith("dispute_refund_"))
