@@ -154,9 +154,11 @@ def register_dispute(dp, bot):
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
 
-        row_order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
+        row_order = await db.db_fetchone("SELECT amount, total_usdt, dispute_card_data, dispute_code FROM orders WHERE id=$1", order_id)
         amount = float(row_order["amount"]) if row_order else 0
         total_usdt = float(row_order["total_usdt"]) if row_order else 0
+        card_data = row_order["dispute_card_data"] if row_order and row_order["dispute_card_data"] else ""
+        dispute_code = row_order["dispute_code"] if row_order and row_order["dispute_code"] else ""
 
         try:
             await bot.send_photo(
@@ -182,7 +184,7 @@ def register_dispute(dp, bot):
             try:
                 await bot.send_message(
                     worker_id,
-                    build_dispute_msg(order_id, amount, reason),
+                    build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
@@ -196,7 +198,7 @@ def register_dispute(dp, bot):
 
         await state.clear()
         new_msg = await message.answer(
-            build_dispute_msg(order_id, amount, reason),
+            build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
             reply_markup=dispute_client_kb(order_id),
             parse_mode="HTML"
         )
