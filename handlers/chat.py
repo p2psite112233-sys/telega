@@ -169,5 +169,5 @@ def register_chat(dp, bot):
         except Exception as e:
             logger.error(f"[chat_send] send error: {e}")
 
-        await message.answer(f"✅ Сообщение по сделке #{order_id} отправлено.")
+        await message.answer("📤 Сообщение отправлено.")
         await state.clear()
