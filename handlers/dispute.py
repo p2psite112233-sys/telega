@@ -43,6 +43,7 @@ def dispute_text(order_id, amount, reason, extra=""):
 def dispute_client_kb(order_id):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
+        [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
         [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
         [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
     ])
