@@ -180,7 +180,7 @@ def register_worker(dp, bot):
                  f"⏳ Ожидайте реквизитов для оплаты",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         )
@@ -201,7 +201,7 @@ def register_worker(dp, bot):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
@@ -288,7 +288,7 @@ def register_worker(dp, bot):
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
-                    [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -306,7 +306,7 @@ def register_worker(dp, bot):
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
@@ -368,7 +368,7 @@ def register_worker(dp, bot):
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
-                    [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -389,7 +389,7 @@ def register_worker(dp, bot):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
@@ -469,7 +469,7 @@ def register_worker(dp, bot):
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
-                    [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -486,7 +486,7 @@ def register_worker(dp, bot):
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
