@@ -282,7 +282,8 @@ def register_worker(dp, bot):
                      f"⏳ Запросите код для успешной оплаты",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")]
+                    [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")]
                 ])
             )
             await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
@@ -353,7 +354,10 @@ def register_worker(dp, bot):
                 f"📊 Статус: 🟢 В работе\n\n"
                 f"🔑 Код запрошен у исполнителя\n"
                 f"⏳ Ожидайте код...",
-                parse_mode="HTML"
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")]
+                ])
             )
             await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_client_msg.message_id, order_id)
 
