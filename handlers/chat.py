@@ -250,11 +250,22 @@ def register_chat(dp, bot):
     @dp.callback_query(F.data.startswith("chat_back_"))
     async def chat_back(call: types.CallbackQuery, state: FSMContext):
         await state.clear()
+        order_id = int(call.data.split("_")[2])
+        uid = call.from_user.id
         try:
             await call.message.delete()
         except:
             pass
-        await call.answer()
+        row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
+        if row:
+            if uid == row["worker_id"]:
+                call.data = f"chat_view_order_{order_id}"
+                await chat_view_order(call)
+            else:
+                call.data = f"chat_view_client_order_{order_id}"
+                await chat_view_client_order(call)
+        else:
+            await call.answer()
 
     @dp.message(ChatStates.waiting_for_message, F.text | F.photo)
     async def chat_send(message: types.Message, state: FSMContext):
@@ -312,5 +323,8 @@ def register_chat(dp, bot):
         except Exception as e:
             logger.error(f"[chat_send] send error: {e}")
 
-        await message.answer("📤 Сообщение отправлено.")
+        await message.answer(
+            "📤 Сообщение отправлено.",
+            reply_markup=chat_msg_kb(order_id, is_worker=(role == "worker"))
+        )
         await state.clear()
