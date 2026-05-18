@@ -109,7 +109,7 @@ def register_chat(dp, bot):
         order_id = int(call.data.split("_")[3])
         uid = call.from_user.id
         row = await db.db_fetchone(
-            "SELECT amount, total_usdt, dispute_card_data, dispute_code, status FROM orders WHERE id=$1 AND worker_id=$2",
+            "SELECT amount, total_usdt, dispute_card_data, dispute_code, code_requested FROM orders WHERE id=$1 AND worker_id=$2",
             order_id, uid
         )
         if not row:
@@ -120,11 +120,20 @@ def register_chat(dp, bot):
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         card_data = row["dispute_card_data"] or ""
         code = row["dispute_code"] or ""
+        code_requested = row["code_requested"] or False
 
         # Определяем состояние и формируем текст + кнопки
         if code:
             text = f"✅ Код отправлен клиенту\n\n{order_info(order_id, amount, total_usdt)}\n\n⏳ Ожидаем подтверждения от клиента"
             kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+            ])
+        elif code_requested:
+            text = f"🔑 Клиент запросил код\n\n{order_info(order_id, amount, total_usdt)}"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
