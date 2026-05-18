@@ -281,10 +281,11 @@ def register_dispute(dp, bot):
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
 
-        row_order = await db.db_fetchone("SELECT amount, total_usdt, dispute_card_data FROM orders WHERE id=$1", order_id)
+        row_order = await db.db_fetchone("SELECT amount, total_usdt, dispute_card_data, dispute_code FROM orders WHERE id=$1", order_id)
         amount = float(row_order["amount"]) if row_order else 0
         total_usdt_val = float(row_order["total_usdt"]) if row_order else 0
         card_data = row_order["dispute_card_data"] if row_order and row_order["dispute_card_data"] else ""
+        dispute_code = row_order["dispute_code"] if row_order and row_order["dispute_code"] else ""
 
         try:
             await bot.send_photo(
@@ -311,7 +312,7 @@ def register_dispute(dp, bot):
             try:
                 new_client_msg = await bot.send_message(
                     client_id,
-                    build_dispute_msg(order_id, amount, reason, card_data=card_data),
+                    build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
@@ -327,7 +328,7 @@ def register_dispute(dp, bot):
         await state.clear()
         # Воркеру — тоже показываем реквизиты если уже были отправлены
         new_msg = await message.answer(
-            build_dispute_msg(order_id, amount, reason, card_data=card_data),
+            build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
