@@ -444,6 +444,8 @@ def register_worker(dp, bot):
             card_data = row["dispute_card_data"] or ""
             await update_client_dispute_msg(bot, order_id, user_id, amount, d_reason, card_data=card_data, code=code)
         else:
+            card_data = row["dispute_card_data"] or ""
+            card_block = f"💳 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
             new_msg = await bot.send_message(
                 chat_id=user_id,
                 text=f"🎉 Заявка #{order_id}\n\n"
@@ -451,6 +453,7 @@ def register_worker(dp, bot):
                      f"💳 Услуга: Карта под оплату\n"
                      f"💰 Сумма: {amount:.2f} RUB\n\n"
                      f"📊 Статус: 🟢 В работе\n\n"
+                     f"{card_block}"
                      f"🔐 Код подтверждения: <code>{code}</code>\n\n"
                      f"⏳ Нажмите кнопку ниже, если оплата прошла успешно",
                 parse_mode="HTML",
