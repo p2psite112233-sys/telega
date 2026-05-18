@@ -7,7 +7,6 @@ from aiogram.fsm.state import StatesGroup, State
 import db
 from config import PROFILE_BANNER_FILE_ID, BANNER_FILE_ID
 from utils.shared import get_role, workers
-from handlers.dispute import update_client_dispute_msg
 
 logger = logging.getLogger(__name__)
 
