@@ -7,6 +7,7 @@ from aiogram.fsm.state import StatesGroup, State
 import db
 from config import PROFILE_BANNER_FILE_ID, BANNER_FILE_ID
 from utils.shared import get_role, workers
+from handlers.dispute import update_client_dispute_msg
 
 logger = logging.getLogger(__name__)
 
@@ -253,47 +254,18 @@ def register_worker(dp, bot):
         total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
         status = order["status"]
 
-        req_extra = (
-            f"\n💳 <b>Реквизиты для оплаты:</b>\n"
-            f"🏦 Банк: {card['bank']}\n"
-            f"💳 Номер карты: <code>{card['card_number']}</code>\n"
-            f"📅 Срок: {card['expiry']}\n"
-            f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
-        )
-
         if status == "DISPUTE":
-            # Получаем причину из БД
-            d_row = await db.db_fetchone("SELECT dispute_reason, client_message_id FROM orders WHERE id=$1", order_id)
+            d_row = await db.db_fetchone("SELECT dispute_reason FROM orders WHERE id=$1", order_id)
             d_reason = d_row["dispute_reason"] if d_row and d_row["dispute_reason"] else "—"
-            d_client_msg_id = d_row["client_message_id"] if d_row else None
-            new_text = (
-                f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
-                f"🆔 <b>Заявка:</b> #{order_id}\n"
-                f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
-                f"💳 <b>Реквизиты для оплаты:</b>\n"
+            card_data = (
                 f"🏦 Банк: {card['bank']}\n"
                 f"💳 Номер карты: <code>{card['card_number']}</code>\n"
                 f"📅 Срок: {card['expiry']}\n"
-                f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
-                f"📝 <b>Причина:</b> {d_reason}\n\n"
-                f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
+                f"🔐 CVV: <code>{card['cvv']}</code>"
             )
-            new_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
-                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать", url="https://t.me/usudhsuhd")],
-                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
-            ])
-            # Удаляем старое и отправляем новое
-            if d_client_msg_id:
-                try:
-                    await bot.delete_message(chat_id=user_id, message_id=d_client_msg_id)
-                except:
-                    pass
-            new_dispute_msg = await bot.send_message(chat_id=user_id, text=new_text, parse_mode="HTML", reply_markup=new_kb)
-            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_dispute_msg.message_id, order_id)
+            await db.db_execute("UPDATE orders SET dispute_card_data=$1 WHERE id=$2", card_data, order_id)
+            await update_client_dispute_msg(bot, order_id, user_id, amount, d_reason, card_data=card_data)
         else:
-            # Обычный флоу
             new_msg = await bot.send_message(
                 chat_id=user_id,
                 text=f"🎉 Заявка #{order_id}\n\n"
@@ -349,7 +321,7 @@ def register_worker(dp, bot):
     async def request_code(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
         row = await db.db_fetchone(
-            "SELECT worker_id FROM orders WHERE id=$1 AND user_id=$2",
+            "SELECT worker_id, status FROM orders WHERE id=$1 AND user_id=$2",
             order_id, call.from_user.id
         )
         if not row or row["worker_id"] is None:
@@ -361,21 +333,27 @@ def register_worker(dp, bot):
             pass
 
         worker_id = row["worker_id"]
-        order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
+        status = row["status"]
+        order = await db.db_fetchone("SELECT amount, total_usdt, dispute_reason, dispute_card_data FROM orders WHERE id=$1", order_id)
         amount = float(order["amount"]) if order else 0.0
         total_usdt = float(order["total_usdt"]) if order and order["total_usdt"] else 0.0
 
-        new_client_msg = await bot.send_message(
-            call.from_user.id,
-            f"🎉 Заявка #{order_id}\n\n"
-            f"💳 Услуга: Карта под оплату\n"
-            f"💰 Сумма: {amount:.2f} RUB\n\n"
-            f"📊 Статус: 🟢 В работе\n\n"
-            f"🔑 Код запрошен у исполнителя\n"
-            f"⏳ Ожидайте код...",
-            parse_mode="HTML"
-        )
-        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_client_msg.message_id, order_id)
+        if status == "DISPUTE":
+            d_reason = order["dispute_reason"] or "—"
+            card_data = order["dispute_card_data"] or ""
+            await update_client_dispute_msg(bot, order_id, call.from_user.id, amount, d_reason, card_data=card_data, code_requested=True)
+        else:
+            new_client_msg = await bot.send_message(
+                call.from_user.id,
+                f"🎉 Заявка #{order_id}\n\n"
+                f"💳 Услуга: Карта под оплату\n"
+                f"💰 Сумма: {amount:.2f} RUB\n\n"
+                f"📊 Статус: 🟢 В работе\n\n"
+                f"🔑 Код запрошен у исполнителя\n"
+                f"⏳ Ожидайте код...",
+                parse_mode="HTML"
+            )
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_client_msg.message_id, order_id)
 
         try:
             w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
@@ -423,7 +401,9 @@ def register_worker(dp, bot):
         ask_code_msg_id = data.get("ask_code_msg_id")
         code = message.text.strip()
 
-        row = await db.db_fetchone("SELECT user_id, amount, total_usdt, client_message_id, status FROM orders WHERE id=$1", order_id)
+        row = await db.db_fetchone(
+            "SELECT user_id, amount, total_usdt, client_message_id, status, dispute_reason, dispute_card_data FROM orders WHERE id=$1", order_id
+        )
         if not row:
             await state.clear()
             return await message.answer("❌ Ошибка: заявка не найдена")
@@ -445,49 +425,10 @@ def register_worker(dp, bot):
             pass
 
         if status == "DISPUTE":
-            # Получаем причину и реквизиты из БД
-            d_row = await db.db_fetchone(
-                "SELECT dispute_reason, client_message_id FROM orders WHERE id=$1", order_id
-            )
-            d_reason = d_row["dispute_reason"] if d_row and d_row["dispute_reason"] else "—"
-            d_client_msg_id = d_row["client_message_id"] if d_row else None
-            # Пытаемся получить реквизиты последней отправленной карты
-            last_card = await db.db_fetchall(
-                "SELECT card_number, expiry, cvv, bank FROM cards WHERE worker_id=(SELECT worker_id FROM orders WHERE id=$1) LIMIT 1", order_id
-            )
-            card_block = ""
-            if last_card:
-                c = last_card[0]
-                card_block = (
-                    f"💳 <b>Реквизиты для оплаты:</b>\n"
-                    f"🏦 Банк: {c['bank']}\n"
-                    f"💳 Номер карты: <code>{c['card_number']}</code>\n"
-                    f"📅 Срок: {c['expiry']}\n"
-                    f"🔐 CVV: <code>{c['cvv']}</code>\n\n"
-                )
-            new_text = (
-                f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
-                f"🆔 <b>Заявка:</b> #{order_id}\n"
-                f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
-                f"{card_block}"
-                f"🔐 <b>Код подтверждения:</b> <code>{code}</code>\n\n"
-                f"📝 <b>Причина:</b> {d_reason}\n\n"
-                f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
-            )
-            new_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать", url="https://t.me/usudhsuhd")],
-                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
-            ])
-            if d_client_msg_id:
-                try:
-                    await bot.delete_message(chat_id=user_id, message_id=d_client_msg_id)
-                except:
-                    pass
-            new_dispute_msg = await bot.send_message(chat_id=user_id, text=new_text, parse_mode="HTML", reply_markup=new_kb)
-            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_dispute_msg.message_id, order_id)
+            d_reason = row["dispute_reason"] or "—"
+            card_data = row["dispute_card_data"] or ""
+            await update_client_dispute_msg(bot, order_id, user_id, amount, d_reason, card_data=card_data, code=code)
         else:
-            # Обычный флоу
             new_msg = await bot.send_message(
                 chat_id=user_id,
                 text=f"🎉 Заявка #{order_id}\n\n"
