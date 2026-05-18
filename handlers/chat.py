@@ -22,7 +22,7 @@ def chat_msg_text(order_id, text):
 
 
 def chat_msg_kb(order_id, is_worker=False):
-    view_cb = f"chat_view_order_{order_id}" if is_worker else f"history_order_{order_id}"
+    view_cb = f"chat_view_order_{order_id}" if is_worker else f"chat_view_client_order_{order_id}"
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✍️ Ответить", callback_data=f"chat_reply_{order_id}")],
         [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=view_cb)]
@@ -102,6 +102,61 @@ def register_chat(dp, bot):
             ])
         )
         await state.update_data(chat_prompt_msg_id=msg.message_id)
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("chat_view_client_order_"))
+    async def chat_view_client_order(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[4])
+        uid = call.from_user.id
+        row = await db.db_fetchone(
+            "SELECT amount, dispute_card_data, dispute_code FROM orders WHERE id=$1 AND user_id=$2",
+            order_id, uid
+        )
+        if not row:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+
+        amount = float(row["amount"])
+        card_data = row["dispute_card_data"] or ""
+        code = row["dispute_code"] or ""
+
+        card_block = f"\n💳 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
+        code_block = f"🔐 Код подтверждения: <code>{code}</code>\n\n" if code else ""
+
+        if code:
+            footer = "⏳ Нажмите кнопку ниже, если оплата прошла успешно"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+            ])
+        elif card_data:
+            footer = "⏳ Запросите код для успешной оплаты"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+            ])
+        else:
+            footer = "⏳ Ожидайте реквизитов для оплаты"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+            ])
+
+        text = (
+            f"🎉 Заявка #{order_id}\n\n"
+            f"🆔 ID: #{order_id}\n"
+            f"💳 Услуга: Карта под оплату\n"
+            f"💰 Сумма: {amount:.2f} RUB\n\n"
+            f"📊 Статус: 🟢 В работе\n"
+            f"{card_block}"
+            f"{code_block}"
+            f"{footer}"
+        )
+        await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
 
     @dp.callback_query(F.data.startswith("chat_view_order_"))
