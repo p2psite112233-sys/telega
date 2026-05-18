@@ -187,7 +187,7 @@ def register_dispute(dp, bot):
                 if not card_data:
                     worker_kb_buttons.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
-                worker_kb_buttons.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data="noop")])
+                worker_kb_buttons.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
                 await bot.send_message(
@@ -337,7 +337,7 @@ def register_dispute(dp, bot):
         if not card_data:
             worker_kb_buttons2.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
         worker_kb_buttons2.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
-        worker_kb_buttons2.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data="noop")])
+        worker_kb_buttons2.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
         worker_kb_buttons2.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
         worker_kb_buttons2.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
         new_msg = await message.answer(
