@@ -107,10 +107,21 @@ def register_chat(dp, bot):
     @dp.callback_query(F.data.startswith("chat_view_order_"))
     async def chat_view_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[3])
-        # Просто редиректим на active_order_ который показывает заявку с кнопками
-        call.data = f"active_order_{order_id}"
-        from handlers.client import lk_buttons
-        await lk_buttons(call, None)
+        uid = call.from_user.id
+        row = await db.db_fetchone(
+            "SELECT worker_message_id FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid
+        )
+        if not row or not row["worker_message_id"]:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+        try:
+            await bot.copy_message(
+                chat_id=uid,
+                from_chat_id=uid,
+                message_id=row["worker_message_id"]
+            )
+        except Exception as e:
+            await call.answer("❌ Не удалось открыть заявку", show_alert=True)
+        await call.answer()
 
     @dp.callback_query(F.data.startswith("chat_back_"))
     async def chat_back(call: types.CallbackQuery, state: FSMContext):
