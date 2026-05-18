@@ -109,7 +109,7 @@ def register_chat(dp, bot):
         order_id = int(call.data.split("_")[4])
         uid = call.from_user.id
         row = await db.db_fetchone(
-            "SELECT amount, dispute_card_data, dispute_code FROM orders WHERE id=$1 AND user_id=$2",
+            "SELECT amount, dispute_card_data, dispute_code, dispute_reason, code_requested, status FROM orders WHERE id=$1 AND user_id=$2",
             order_id, uid
         )
         if not row:
@@ -118,6 +118,20 @@ def register_chat(dp, bot):
         amount = float(row["amount"])
         card_data = row["dispute_card_data"] or ""
         code = row["dispute_code"] or ""
+        status = row["status"]
+
+        # Если спор — показываем сообщение спора
+        if status == "DISPUTE":
+            from handlers.dispute import build_dispute_msg, dispute_client_kb
+            reason = row["dispute_reason"] or "—"
+            code_req = row.get("code_requested") or False
+            await bot.send_message(
+                uid,
+                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=code_req),
+                parse_mode="HTML",
+                reply_markup=dispute_client_kb(order_id)
+            )
+            return await call.answer()
 
         card_block = f"\n💳 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
         code_block = f"🔐 Код подтверждения: <code>{code}</code>\n\n" if code else ""
@@ -164,7 +178,7 @@ def register_chat(dp, bot):
         order_id = int(call.data.split("_")[3])
         uid = call.from_user.id
         row = await db.db_fetchone(
-            "SELECT amount, total_usdt, dispute_card_data, dispute_code, code_requested FROM orders WHERE id=$1 AND worker_id=$2",
+            "SELECT amount, total_usdt, dispute_card_data, dispute_code, dispute_reason, code_requested, status FROM orders WHERE id=$1 AND worker_id=$2",
             order_id, uid
         )
         if not row:
@@ -176,6 +190,27 @@ def register_chat(dp, bot):
         card_data = row["dispute_card_data"] or ""
         code = row["dispute_code"] or ""
         code_requested = row["code_requested"] or False
+        status = row["status"]
+
+        # Если спор — показываем сообщение спора
+        if status == "DISPUTE":
+            from handlers.dispute import build_dispute_msg
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            reason = row["dispute_reason"] or "—"
+            worker_kb = []
+            if not card_data:
+                worker_kb.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
+            worker_kb.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
+            worker_kb.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
+            worker_kb.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
+            worker_kb.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
+            await bot.send_message(
+                uid,
+                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=(code_requested and not code)),
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb)
+            )
+            return await call.answer()
 
         # Определяем состояние и формируем текст + кнопки
         if code:
