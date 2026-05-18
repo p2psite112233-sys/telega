@@ -444,3 +444,4 @@ def register_dispute(dp: Dispatcher, bot: Bot):
         ])
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
+ 
