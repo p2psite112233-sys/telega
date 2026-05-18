@@ -254,16 +254,18 @@ def register_worker(dp, bot):
         total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
         status = order["status"]
 
+        # Сохраняем реквизиты всегда — пригодится если потом откроется спор
+        card_data = (
+            f"🏦 Банк: {card['bank']}\n"
+            f"💳 Номер карты: <code>{card['card_number']}</code>\n"
+            f"📅 Срок: {card['expiry']}\n"
+            f"🔐 CVV: <code>{card['cvv']}</code>"
+        )
+        await db.db_execute("UPDATE orders SET dispute_card_data=$1 WHERE id=$2", card_data, order_id)
+
         if status == "DISPUTE":
             d_row = await db.db_fetchone("SELECT dispute_reason FROM orders WHERE id=$1", order_id)
             d_reason = d_row["dispute_reason"] if d_row and d_row["dispute_reason"] else "—"
-            card_data = (
-                f"🏦 Банк: {card['bank']}\n"
-                f"💳 Номер карты: <code>{card['card_number']}</code>\n"
-                f"📅 Срок: {card['expiry']}\n"
-                f"🔐 CVV: <code>{card['cvv']}</code>"
-            )
-            await db.db_execute("UPDATE orders SET dispute_card_data=$1 WHERE id=$2", card_data, order_id)
             await update_client_dispute_msg(bot, order_id, user_id, amount, d_reason, card_data=card_data)
         else:
             new_msg = await bot.send_message(
