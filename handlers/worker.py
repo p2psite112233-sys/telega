@@ -381,6 +381,8 @@ def register_worker(dp, bot):
         except:
             pass
 
+        await db.db_execute("UPDATE orders SET code_requested=TRUE WHERE id=$1", order_id)
+
         new_worker_msg = await bot.send_message(
             worker_id,
             f"🔑 Клиент запросил код\n\n"
