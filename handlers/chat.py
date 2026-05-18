@@ -109,18 +109,43 @@ def register_chat(dp, bot):
         order_id = int(call.data.split("_")[3])
         uid = call.from_user.id
         row = await db.db_fetchone(
-            "SELECT worker_message_id FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid
+            "SELECT amount, total_usdt, dispute_card_data, dispute_code, status FROM orders WHERE id=$1 AND worker_id=$2",
+            order_id, uid
         )
-        if not row or not row["worker_message_id"]:
+        if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
-        try:
-            await bot.copy_message(
-                chat_id=uid,
-                from_chat_id=uid,
-                message_id=row["worker_message_id"]
-            )
-        except Exception as e:
-            await call.answer("❌ Не удалось открыть заявку", show_alert=True)
+
+        from handlers.worker import order_info
+        amount = float(row["amount"])
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
+        card_data = row["dispute_card_data"] or ""
+        code = row["dispute_code"] or ""
+
+        # Определяем состояние и формируем текст + кнопки
+        if code:
+            text = f"✅ Код отправлен клиенту\n\n{order_info(order_id, amount, total_usdt)}\n\n⏳ Ожидаем подтверждения от клиента"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+            ])
+        elif card_data:
+            text = f"✅ Реквизиты по заявке #{order_id} отправлены\n\n{order_info(order_id, amount, total_usdt)}\n\n⏳ Ожидаем запрос кода от клиента"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+            ])
+        else:
+            text = f"✅ Вы взяли заказ #{order_id}\n\n{order_info(order_id, amount, total_usdt)}"
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+            ])
+
+        await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
 
     @dp.callback_query(F.data.startswith("chat_back_"))
