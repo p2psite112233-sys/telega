@@ -238,9 +238,13 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
             active_count = row["count"] if row else 0
             text = (
-                f"🛠 Профиль работника\nВаш профиль: {username} [{uid}]\n\n"
-                f"💼 Финансы\n• Доступно для вывода: {balance:.2f} USDT\n\n"
-                f"📊 Статистика\n• Обработано заявок: {done_count} шт\n• Активных заявок: {active_count} шт"
+                f"🛠 <b>Профиль работника</b>\n"
+                f"Аккаунт: {username}\n\n"
+                f"💼 <b>Финансы</b>\n"
+                f"• Доступно: <b>{balance:.2f} USDT</b>\n\n"
+                f"📊 <b>Статистика</b>\n"
+                f"• Выполнено: {done_count} шт\n"
+                f"• В работе: {active_count} шт"
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
@@ -248,7 +252,7 @@ def register_client(dp, bot):
                  InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")],
                 [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")]
             ])
-            await bot.send_message(chat_id, text, reply_markup=keyboard)
+            await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
 
         if call.data.startswith("card_view_"):
