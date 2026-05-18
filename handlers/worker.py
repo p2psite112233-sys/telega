@@ -7,8 +7,6 @@ from aiogram.fsm.state import StatesGroup, State
 import db
 from config import PROFILE_BANNER_FILE_ID, BANNER_FILE_ID
 from utils.shared import get_role, workers
-# Возвращаем импорт правильной универсальной функции из диспута
-from handlers.dispute import update_client_dispute_msg
 
 logger = logging.getLogger(__name__)
 
@@ -255,14 +253,15 @@ def register_worker(dp, bot: Bot):
         total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
         status = order["status"]
 
-        # ОБНОВЛЯЕМ РЕКВИЗИТЫ В БАЗЕ ДАННЫХ (Общие поля для обычного режима и для спора)
+        # ОБНОВЛЯЕМ РЕКВИЗИТЫ В БАЗЕ ДАННЫХ
         await db.db_execute(
             "UPDATE orders SET bank=$1, card_number=$2, card_expire=$3, card_cvv=$4 WHERE id=$5",
             card['bank'], card['card_number'], card['expiry'], card['cvv'], order_id
         )
 
         if status == "DISPUTE":
-            # Вызов обновлен под новую асинхронную обертку (2 аргумента)
+            # Локальный импорт функции для защиты от круговой зависимости
+            from handlers.dispute import update_client_dispute_msg
             await update_client_dispute_msg(order_id, bot)
         else:
             # Обычный режим (когда спора нет)
@@ -291,8 +290,6 @@ def register_worker(dp, bot: Bot):
 
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
         
-        # Если статус DISPUTE, сообщение воркера обновит функция `update_client_dispute_msg`, 
-        # для обычного режима выводим стандартную панель ожидания кода:
         if status != "DISPUTE":
             worker_msg = await call.message.answer(
                 f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
@@ -344,7 +341,8 @@ def register_worker(dp, bot: Bot):
         await db.db_execute("UPDATE orders SET code_requested=True WHERE id=$1", order_id)
 
         if status == "DISPUTE":
-            # Вызов обновлен под новую асинхронную обертку (2 аргумента)
+            # Локальный импорт функции для защиты от круговой зависимости
+            from handlers.dispute import update_client_dispute_msg
             await update_client_dispute_msg(order_id, bot)
         else:
             new_client_msg = await bot.send_message(
@@ -419,7 +417,7 @@ def register_worker(dp, bot: Bot):
         status = row["status"]
 
         if ask_code_msg_id:
-            try: Ukrainian = await bot.delete_message(chat_id=message.chat.id, message_id=ask_code_msg_id)
+            try: await bot.delete_message(chat_id=message.chat.id, message_id=ask_code_msg_id)
             except: pass
         try:
             await message.delete()
@@ -430,7 +428,8 @@ def register_worker(dp, bot: Bot):
         await db.db_execute("UPDATE orders SET sms_code=$1, code_requested=False WHERE id=$2", code, order_id)
 
         if status == "DISPUTE":
-            # Вызов обновлен под новую асинхронную обертку (2 аргумента)
+            # Локальный импорт функции для защиты от круговой зависимости
+            from handlers.dispute import update_client_dispute_msg
             await update_client_dispute_msg(order_id, bot)
         else:
             new_msg = await bot.send_message(
