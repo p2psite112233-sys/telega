@@ -61,6 +61,75 @@ async def dispute_text(order_id, amount, reason, extra=""):
     return text
 
 
+# --- УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДИНАМИЧЕСКОГО ОБНОВЛЕНИЯ СООБЩЕНИЙ СПОРА ---
+async def update_client_dispute_msg(order_id: int, bot: Bot):
+    """
+    Универсальная функция, которая берет текущее состояние спора из БД,
+    формирует актуальный текст и обновляет сообщения у Клиента и Воркера.
+    """
+    row = await db.db_fetchone(
+        "SELECT user_id, worker_id, amount, dispute_reason, client_message_id, worker_message_id, bank, card_number, sms_code, code_requested "
+        "FROM orders WHERE id=$1", order_id
+    )
+    if not row:
+        return
+
+    user_id = row["user_id"]
+    worker_id = row["worker_id"]
+    amount = float(row["amount"])
+    reason = row["dispute_reason"] or "Не указана"
+    client_msg_id = row["client_message_id"]
+    worker_msg_id = row["worker_message_id"]
+
+    # Генерируем новый текст на основе текущего состояния БД
+    text = await dispute_text(order_id, amount, reason)
+
+    # 1. ОБНОВЛЕНИЕ КЛИЕНТА
+    client_buttons = []
+    # Если реквизиты отправлены, но код еще не запрошен и не получен — даем кнопку запроса кода
+    if (row["bank"] or row["card_number"]) and not row["code_requested"] and not row["sms_code"]:
+        client_buttons.append([InlineKeyboardButton(text="🔐 Запросить код", callback_data=f"request_code_{order_id}")])
+    
+    client_buttons.extend([
+        [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
+        [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+        [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+    ])
+    
+    if client_msg_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=user_id, message_id=client_msg_id, text=text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=client_buttons), parse_mode="HTML"
+            )
+        except TelegramBadRequest:
+            pass # Игнорируем, если текст не изменился или сообщение удалено
+
+    # 2. ОБНОВЛЕНИЕ ВОРКЕРА
+    if worker_id:
+        worker_buttons = []
+        # Если реквизитов еще нет, воркер может их отправить
+        if not row["bank"] and not row["card_number"]:
+            worker_buttons.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
+        # Если клиент запросил код, воркер видит кнопку отправки кода
+        if row["code_requested"]:
+            worker_buttons.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
+            
+        worker_buttons.extend([
+            [InlineKeyboardButton(text="✍️ Написать сообщение", url="https://t.me/usudhsuhd")],
+            [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+        ])
+
+        if worker_msg_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=worker_id, message_id=worker_msg_id, text=text,
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_buttons), parse_mode="HTML"
+                )
+            except TelegramBadRequest:
+                pass
+
+
 def register_dispute(dp: Dispatcher, bot: Bot):
 
     # --- ОБЩАЯ ОТМЕНА СПОРА ---
@@ -152,9 +221,10 @@ def register_dispute(dp: Dispatcher, bot: Bot):
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
 
-        row_order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
+        row_order = await db.db_fetchone("SELECT amount, total_usdt, worker_message_id FROM orders WHERE id=$1", order_id)
         amount = float(row_order["amount"]) if row_order else 0
         total_usdt = float(row_order["total_usdt"]) if row_order else 0
+        old_worker_msg_id = row_order["worker_message_id"] if row_order else None
 
         try:
             await bot.send_photo(
@@ -176,10 +246,17 @@ def register_dispute(dp: Dispatcher, bot: Bot):
         except Exception as e:
             logger.error(f"[dispute_screenshot] admin notify error: {e}")
 
+        # Удаляем старое обычное сообщение воркера, если оно было
+        if worker_id and old_worker_msg_id:
+            try:
+                await bot.delete_message(chat_id=worker_id, message_id=old_worker_msg_id)
+            except Exception:
+                pass
+
         if worker_id:
             try:
                 worker_text = await dispute_text(order_id, amount, reason)
-                await bot.send_message(
+                new_w_msg = await bot.send_message(
                     worker_id,
                     worker_text,
                     parse_mode="HTML",
@@ -188,6 +265,7 @@ def register_dispute(dp: Dispatcher, bot: Bot):
                         [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
                     ])
                 )
+                await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", new_w_msg.message_id, order_id)
             except Exception:
                 pass
 
@@ -205,7 +283,7 @@ def register_dispute(dp: Dispatcher, bot: Bot):
     async def dispute_screenshot_invalid(message: types.Message):
         await message.answer("⚠️ Пожалуйста, отправьте именно <b>фотографию</b> (скриншот) для подтверждения.")
 
-    # --- СПОР ВОРКЕРА ---
+    # --- --- --- СПОР ВОРКЕРА --- --- ---
     @dp.callback_query(F.data.startswith("worker_dispute_"))
     async def worker_dispute_start(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[2])
@@ -284,9 +362,10 @@ def register_dispute(dp: Dispatcher, bot: Bot):
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
 
-        row_order = await db.db_fetchone("SELECT amount, total_usdt FROM orders WHERE id=$1", order_id)
+        row_order = await db.db_fetchone("SELECT amount, total_usdt, client_message_id FROM orders WHERE id=$1", order_id)
         amount = float(row_order["amount"]) if row_order else 0
         total_usdt_val = float(row_order["total_usdt"]) if row_order else 0
+        old_client_msg_id = row_order["client_message_id"] if row_order else None
 
         try:
             await bot.send_photo(
@@ -308,27 +387,33 @@ def register_dispute(dp: Dispatcher, bot: Bot):
         except Exception as e:
             logger.error(f"[worker_dispute_screenshot] admin notify error: {e}")
 
+        # Удаляем старое обычное сообщение клиента, если оно было
+        if client_id and old_client_msg_id:
+            try:
+                await bot.delete_message(chat_id=client_id, message_id=old_client_msg_id)
+            except Exception:
+                pass
+
         if client_id:
             try:
                 client_text = await dispute_text(order_id, amount, reason)
-                await bot.send_message(
+                new_c_msg = await bot.send_message(
                     client_id,
                     client_text,
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
-                        [InlineKeyboardButton(text="🔐 Запросить код", callback_data=f"request_code_{order_id}")],
                         [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
                         [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                     ])
                 )
+                await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_c_msg.message_id, order_id)
             except Exception:
                 pass
 
         await state.clear()
         d_kb_w = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
-            [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
             [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
             [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
         ])
@@ -444,4 +529,3 @@ def register_dispute(dp: Dispatcher, bot: Bot):
         ])
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
- 
