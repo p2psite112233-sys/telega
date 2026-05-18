@@ -426,6 +426,9 @@ def register_worker(dp, bot):
         except:
             pass
 
+        # Сохраняем код всегда — пригодится если потом откроется спор
+        await db.db_execute("UPDATE orders SET dispute_code=$1 WHERE id=$2", code, order_id)
+
         if status == "DISPUTE":
             d_reason = row["dispute_reason"] or "—"
             card_data = row["dispute_card_data"] or ""
