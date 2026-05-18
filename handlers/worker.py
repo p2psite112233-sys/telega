@@ -200,7 +200,9 @@ def register_worker(dp, bot):
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
-                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
         await call.answer()
@@ -303,7 +305,9 @@ def register_worker(dp, bot):
             f"⏳ Ожидаем запрос кода от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
         old_worker_msg_id = None
@@ -384,7 +388,9 @@ def register_worker(dp, bot):
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
-                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", new_worker_msg.message_id, order_id)
@@ -479,7 +485,9 @@ def register_worker(dp, bot):
             f"⏳ Ожидаем подтверждения от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")]
+                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", url="https://t.me/usudhsuhd")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
         await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
