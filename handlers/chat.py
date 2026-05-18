@@ -16,8 +16,8 @@ class ChatStates(StatesGroup):
 def chat_msg_text(order_id, text):
     return (
         f"📥 <b>Сообщение по сделке #{order_id}:</b>\n\n"
-        f"<blockquote>⚠️ Не используйте платёжные реквизиты или контактную информацию из этого сообщения.</blockquote>\n\n"
-        f"{text}"
+        f"⚠️ <b>Не используйте</b> платёжные реквизиты или контактную информацию из этого сообщения.\n\n"
+        f"<blockquote>{text}</blockquote>"
     )
 
 
