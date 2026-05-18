@@ -22,7 +22,7 @@ def chat_msg_text(order_id, text):
 
 
 def chat_msg_kb(order_id, is_worker=False):
-    view_cb = f"lk_home" if is_worker else "client_back_menu"
+    view_cb = f"active_order_{order_id}" if is_worker else f"history_order_{order_id}"
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✍️ Ответить", callback_data=f"chat_reply_{order_id}")],
         [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=view_cb)]
