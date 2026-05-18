@@ -18,6 +18,7 @@ from handlers.client import register_client
 from handlers.admin import register_admin
 from handlers.apply import register_apply
 from handlers.dispute import register_dispute
+from handlers.chat import register_chat
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -25,6 +26,7 @@ dp = Dispatcher()
 # Порядок важен!
 register_admin(dp, bot)
 register_dispute(dp, bot)  # Спор первым — FSM фото
+register_chat(dp, bot)
 register_client(dp, bot)
 register_apply(dp, bot)
 register_worker(dp, bot)
