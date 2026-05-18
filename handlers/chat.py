@@ -247,7 +247,7 @@ def register_chat(dp, bot):
         await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
 
-    @dp.callback_query(F.data.startswith("chat_back_"))
+    @dp.callback_query(F.data.startswith("chat_back_"), ChatStates.waiting_for_message)
     async def chat_back(call: types.CallbackQuery, state: FSMContext):
         await state.clear()
         order_id = int(call.data.split("_")[2])
@@ -323,8 +323,11 @@ def register_chat(dp, bot):
         except Exception as e:
             logger.error(f"[chat_send] send error: {e}")
 
+        view_cb = f"chat_view_order_{order_id}" if role == "worker" else f"chat_view_client_order_{order_id}"
+        await state.clear()
         await message.answer(
             "📤 Сообщение отправлено.",
-            reply_markup=chat_msg_kb(order_id, is_worker=(role == "worker"))
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=view_cb)]
+            ])
         )
-        await state.clear()
