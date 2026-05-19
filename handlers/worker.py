@@ -168,20 +168,22 @@ def register_worker(dp, bot):
             return await call.answer("❌ Заявку уже забрали!", show_alert=True)
 
         # Убираем кнопки у остальных воркеров
-        from handlers.common import broadcast_msgs
-        msgs = broadcast_msgs.pop(order_id, {})
-        for w_id, msg_id in msgs.items():
-            if w_id == uid:
+        broadcasts = await db.db_fetchall(
+            "SELECT worker_id, message_id FROM order_broadcasts WHERE order_id=$1", order_id
+        )
+        for b in broadcasts:
+            if b["worker_id"] == uid:
                 continue
             try:
                 await bot.edit_message_text(
-                    chat_id=w_id,
-                    message_id=msg_id,
+                    chat_id=b["worker_id"],
+                    message_id=b["message_id"],
                     text=f"⚙️ Заявка #{order_id} уже принята другим исполнителем."
                 )
                 await asyncio.sleep(0.05)
             except:
                 pass
+        await db.db_execute("DELETE FROM order_broadcasts WHERE order_id=$1", order_id)
 
         order = await db.db_fetchone("SELECT user_id, amount, client_message_id, total_usdt, is_unique FROM orders WHERE id=$1", order_id)
         amount = float(order["amount"])
