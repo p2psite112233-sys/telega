@@ -326,30 +326,26 @@ def register_client(dp, bot):
         if call.data.startswith("lk_history"):
             parts = call.data.split("_")
             filter_type = parts[2] if len(parts) > 2 else "all"
-            if filter_type == "all":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 10", uid
-                )
-            elif filter_type == "done":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 10", uid
-                )
-            elif filter_type == "active":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC LIMIT 10", uid
-                )
-            elif filter_type == "cancelled":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 10", uid
-                )
-            else:
-                orders = []
+            page = int(parts[3]) if len(parts) > 3 else 0
+            offset = page * 10
+            status_map = {
+                "all": "status IN ('IN_PROGRESS', 'DONE', 'CANCELLED')",
+                "done": "status='DONE'",
+                "active": "status='IN_PROGRESS'",
+                "cancelled": "status='CANCELLED'"
+            }
+            where = status_map.get(filter_type, status_map["all"])
+            orders = await db.db_fetchall(
+                f"SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND {where} ORDER BY id DESC LIMIT 11 OFFSET {offset}", uid
+            )
+            has_next = len(orders) == 11
+            orders = orders[:10]
             filter_kb = [
                 [
-                    InlineKeyboardButton(text="📋 Все", callback_data="lk_history_all"),
-                    InlineKeyboardButton(text="✅ Закрыто", callback_data="lk_history_done"),
-                    InlineKeyboardButton(text="🟢 Активные", callback_data="lk_history_active"),
-                    InlineKeyboardButton(text="❌ Отмена", callback_data="lk_history_cancelled"),
+                    InlineKeyboardButton(text="📋 Все", callback_data="lk_history_all_0"),
+                    InlineKeyboardButton(text="✅ Закрыто", callback_data="lk_history_done_0"),
+                    InlineKeyboardButton(text="🟢 Активные", callback_data="lk_history_active_0"),
+                    InlineKeyboardButton(text="❌ Отмена", callback_data="lk_history_cancelled_0"),
                 ]
             ]
             if not orders:
@@ -372,6 +368,14 @@ def register_client(dp, bot):
                     text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"worker_history_order_{order['id']}"
                 )])
+            nav = []
+            if page > 0:
+                nav.append(InlineKeyboardButton(text="◀️", callback_data=f"lk_history_{filter_type}_{page-1}"))
+            nav.append(InlineKeyboardButton(text=f"• {page+1} •", callback_data="noop"))
+            if has_next:
+                nav.append(InlineKeyboardButton(text="▶️", callback_data=f"lk_history_{filter_type}_{page+1}"))
+            if len(nav) > 1:
+                buttons.append(nav)
             buttons.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
             await bot.send_photo(
                 chat_id, photo=PROFILE_BANNER_FILE_ID,
@@ -407,30 +411,26 @@ def register_client(dp, bot):
         if call.data.startswith("client_history"):
             parts = call.data.split("_")
             filter_type = parts[2] if len(parts) > 2 else "all"
-            if filter_type == "all":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 10", uid
-                )
-            elif filter_type == "done":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 10", uid
-                )
-            elif filter_type == "active":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC LIMIT 10", uid
-                )
-            elif filter_type == "cancelled":
-                orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 10", uid
-                )
-            else:
-                orders = []
+            page = int(parts[3]) if len(parts) > 3 else 0
+            offset = page * 10
+            status_map = {
+                "all": "status IN ('NEW', 'IN_PROGRESS', 'DONE', 'CANCELLED')",
+                "done": "status='DONE'",
+                "active": "status IN ('NEW', 'IN_PROGRESS')",
+                "cancelled": "status='CANCELLED'"
+            }
+            where = status_map.get(filter_type, status_map["all"])
+            orders = await db.db_fetchall(
+                f"SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND {where} ORDER BY id DESC LIMIT 11 OFFSET {offset}", uid
+            )
+            has_next = len(orders) == 11
+            orders = orders[:10]
             filter_kb = [
                 [
-                    InlineKeyboardButton(text="📋 Все", callback_data="client_history_all"),
-                    InlineKeyboardButton(text="✅ Закрыто", callback_data="client_history_done"),
-                    InlineKeyboardButton(text="🟢 Активные", callback_data="client_history_active"),
-                    InlineKeyboardButton(text="❌ Отмена", callback_data="client_history_cancelled"),
+                    InlineKeyboardButton(text="📋 Все", callback_data="client_history_all_0"),
+                    InlineKeyboardButton(text="✅ Закрыто", callback_data="client_history_done_0"),
+                    InlineKeyboardButton(text="🟢 Активные", callback_data="client_history_active_0"),
+                    InlineKeyboardButton(text="❌ Отмена", callback_data="client_history_cancelled_0"),
                 ]
             ]
             if not orders:
@@ -453,6 +453,14 @@ def register_client(dp, bot):
                     text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"history_order_{order['id']}"
                 )])
+            nav = []
+            if page > 0:
+                nav.append(InlineKeyboardButton(text="◀️", callback_data=f"client_history_{filter_type}_{page-1}"))
+            nav.append(InlineKeyboardButton(text=f"• {page+1} •", callback_data="noop"))
+            if has_next:
+                nav.append(InlineKeyboardButton(text="▶️", callback_data=f"client_history_{filter_type}_{page+1}"))
+            if len(nav) > 1:
+                buttons.append(nav)
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
             await bot.send_photo(
                 chat_id, photo=PROFILE_BANNER_FILE_ID,
