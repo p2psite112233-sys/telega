@@ -227,17 +227,16 @@ def register_chat(dp, bot):
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
         amount = float(row["amount"])
-        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
+        total_usdt = float(row["total_usdt"] or 0)
         card_data = row["dispute_card_data"] or ""
         code = row["dispute_code"] or ""
-        code_requested = row["code_requested"] or False
+        reason = row["dispute_reason"] or "—"
+        code_req_flag = row["code_requested"] or False
         status = row["status"]
 
         # Если спор — показываем сообщение спора
         if status == "DISPUTE":
             from handlers.dispute import build_dispute_msg
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            reason = row["dispute_reason"] or "—"
             worker_kb = []
             if not card_data:
                 worker_kb.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
@@ -247,7 +246,7 @@ def register_chat(dp, bot):
             worker_kb.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             await bot.send_message(
                 uid,
-                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=(code_requested and not code)),
+                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=(code_req_flag and not code)),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb)
             )
@@ -261,7 +260,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
-        elif code_requested:
+        elif code_req_flag:
             text = f"🔑 Клиент запросил код\n\n{order_info(order_id, amount, total_usdt)}"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
