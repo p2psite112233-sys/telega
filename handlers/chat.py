@@ -9,17 +9,18 @@ import db
 logger = logging.getLogger(__name__)
 
 
-def order_info(order_id: int, amount: float, total_usdt: float) -> str:
-    commission = max(round(amount * 0.20, 2), 30)
+def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = False) -> str:
+    commission = max(round(amount * (0.25 if unique else 0.20), 2), 30)
     total_rub = round(amount + commission, 2)
     amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
     commission_usdt = round(total_usdt - amount_usdt, 4)
     worker_net_usdt = round(commission_usdt * 0.8, 4)
     worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+    unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
     return (
         f"🆔 <b>ID заявки:</b> #{order_id}\n"
         f"💳 <b>Услуга:</b> Карта под оплату\n"
-        f"🃏 ❌ Обычная карта\n\n"
+        f"🃏 {unique_text}\n\n"
         f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB (~{amount_usdt:.4f} USDT)\n"
         f"💎 <b>Клиент оплатит:</b> {total_rub:.2f} RUB\n\n"
         f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
@@ -220,7 +221,7 @@ def register_chat(dp, bot):
         order_id = int(call.data.split("_")[3])
         uid = call.from_user.id
         row = await db.db_fetchone(
-            "SELECT amount, total_usdt, dispute_card_data, dispute_code, dispute_reason, code_requested, status FROM orders WHERE id=$1 AND worker_id=$2",
+            "SELECT amount, total_usdt, dispute_card_data, dispute_code, dispute_reason, code_requested, status, is_unique FROM orders WHERE id=$1 AND worker_id=$2",
             order_id, uid
         )
         if not row:
@@ -233,6 +234,7 @@ def register_chat(dp, bot):
         reason = row["dispute_reason"] or "—"
         code_req_flag = row["code_requested"] or False
         status = row["status"]
+        is_unique = row["is_unique"] or False
 
         # Если спор — показываем сообщение спора
         if status == "DISPUTE":
@@ -254,14 +256,14 @@ def register_chat(dp, bot):
 
         # Определяем состояние и формируем текст + кнопки
         if code:
-            text = f"✅ Код отправлен клиенту\n\n{order_info(order_id, amount, total_usdt)}\n\n⏳ Ожидаем подтверждения от клиента"
+            text = f"✅ Код отправлен клиенту\n\n{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n⏳ Ожидаем подтверждения от клиента"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         elif code_req_flag:
-            text = f"🔑 Клиент запросил код\n\n{order_info(order_id, amount, total_usdt)}"
+            text = f"🔑 Клиент запросил код\n\n{order_info(order_id, amount, total_usdt, unique=is_unique)}"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -269,14 +271,14 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         elif card_data:
-            text = f"✅ Реквизиты по заявке #{order_id} отправлены\n\n{order_info(order_id, amount, total_usdt)}\n\n⏳ Ожидаем запрос кода от клиента"
+            text = f"✅ Реквизиты по заявке #{order_id} отправлены\n\n{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n⏳ Ожидаем запрос кода от клиента"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         else:
-            text = f"✅ Вы взяли заказ #{order_id}\n\n{order_info(order_id, amount, total_usdt)}"
+            text = f"✅ Вы взяли заказ #{order_id}\n\n{order_info(order_id, amount, total_usdt, unique=is_unique)}"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
