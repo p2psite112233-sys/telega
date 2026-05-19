@@ -19,6 +19,7 @@ from handlers.admin import register_admin
 from handlers.apply import register_apply
 from handlers.dispute import register_dispute
 from handlers.chat import register_chat
+from handlers.withdraw import register_withdraw
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -30,6 +31,7 @@ register_chat(dp, bot)
 register_client(dp, bot)
 register_apply(dp, bot)
 register_worker(dp, bot)
+register_withdraw(dp, bot)
 register_common(dp, bot)
 
 async def handle(request):
