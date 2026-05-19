@@ -33,6 +33,24 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
         f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
     )
 
+def order_info_sbp(order_id: int, amount: float, total_usdt: float, phone: str, bank: str, name: str) -> str:
+    commission = max(round(amount * 0.20, 2), 30)
+    total_rub = round(amount + commission, 2)
+    amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
+    commission_usdt = round(total_usdt - amount_usdt, 4)
+    worker_net_usdt = round(commission_usdt * 0.8, 4)
+    worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+    return (
+        f"🆔 <b>ID заявки:</b> #{order_id}\n"
+        f"💸 <b>Услуга:</b> Перевод по СБП\n\n"
+        f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
+        f"📱 <b>Телефон:</b> <code>{phone}</code>\n"
+        f"🏦 <b>Банк:</b> {bank}\n"
+        f"👤 <b>Получатель:</b> {name}\n\n"
+        f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+        f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
+    )
+
 def register_worker(dp, bot):
 
     @dp.message(F.text == "/lk")
@@ -87,7 +105,7 @@ def register_worker(dp, bot):
     @dp.callback_query(F.data == "lk_available")
     async def lk_active(call: types.CallbackQuery):
         orders = await db.db_fetchall(
-            "SELECT id, amount, status FROM orders WHERE status='NEW' ORDER BY id DESC LIMIT 20"
+            "SELECT id, amount, status, transfer_type FROM orders WHERE status='NEW' ORDER BY id DESC LIMIT 20"
         )
         try:
             await call.message.delete()
@@ -106,8 +124,13 @@ def register_worker(dp, bot):
 
         buttons = []
         for order in orders:
+            t = order["transfer_type"]
+            if t == "sbp":
+                label = "📲 СБП"
+            else:
+                label = "💳 Карта под оплату"
             buttons.append([InlineKeyboardButton(
-                text=f"💳 #{order['id']} — {float(order['amount']):.0f} RUB • Карта под оплату",
+                text=f"{label} #{order['id']} — {float(order['amount']):.0f} RUB",
                 callback_data=f"take_{order['id']}"
             )])
         buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
@@ -185,47 +208,167 @@ def register_worker(dp, bot):
                 pass
         await db.db_execute("DELETE FROM order_broadcasts WHERE order_id=$1", order_id)
 
-        order = await db.db_fetchone("SELECT user_id, amount, client_message_id, total_usdt, is_unique FROM orders WHERE id=$1", order_id)
+        order = await db.db_fetchone(
+            "SELECT user_id, amount, client_message_id, total_usdt, is_unique, transfer_type, transfer_phone, transfer_bank, transfer_recipient_name FROM orders WHERE id=$1",
+            order_id
+        )
         amount = float(order["amount"])
         total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0.0
         is_unique = order["is_unique"] or False
+        transfer_type = order["transfer_type"]
 
-        new_msg = await bot.send_message(
-            chat_id=order["user_id"],
-            text=f"🎉 Заявка #{order_id}\n\n"
-                 f"💳 Услуга: Карта под оплату\n"
-                 f"💰 Сумма: {amount:.2f} RUB\n\n"
-                 f"📊 Статус: 🟢 В работе\n"
-                 f"👨‍💻 Исполнитель уже готовит реквизиты\n\n"
-                 f"⏳ Ожидайте реквизитов для оплаты",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
-                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
-                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
-            ])
+        # СБП заявка
+        if transfer_type == "sbp":
+            phone = order["transfer_phone"] or ""
+            bank = order["transfer_bank"] or ""
+            name = order["transfer_recipient_name"] or ""
+
+            new_msg = await bot.send_message(
+                chat_id=order["user_id"],
+                text=f"🎉 Заявка #{order_id}\n\n"
+                     f"💸 Тип: Перевод по СБП\n"
+                     f"💰 Сумма: {amount:.2f} RUB\n\n"
+                     f"📊 Статус: 🟢 В работе\n"
+                     f"👨‍💻 Исполнитель принял заявку\n\n"
+                     f"⏳ Ожидайте перевода",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")],
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+                ])
+            )
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
+            try:
+                await bot.delete_message(order["user_id"], order["client_message_id"])
+            except:
+                pass
+
+            try:
+                await call.message.delete()
+            except:
+                pass
+
+            worker_msg = await call.message.answer(
+                f"✅ Вы взяли заявку #{order_id}\n\n"
+                f"{order_info_sbp(order_id, amount, total_usdt, phone, bank, name)}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")],
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+                ])
+            )
+            await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
+
+        else:
+            # Обычная заявка — карта под оплату
+            new_msg = await bot.send_message(
+                chat_id=order["user_id"],
+                text=f"🎉 Заявка #{order_id}\n\n"
+                     f"💳 Услуга: Карта под оплату\n"
+                     f"💰 Сумма: {amount:.2f} RUB\n\n"
+                     f"📊 Статус: 🟢 В работе\n"
+                     f"👨‍💻 Исполнитель уже готовит реквизиты\n\n"
+                     f"⏳ Ожидайте реквизитов для оплаты",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+                ])
+            )
+            await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
+            try:
+                await bot.delete_message(order["user_id"], order["client_message_id"])
+            except Exception as e:
+                logger.error(f"[take] delete old msg error: {e}")
+
+            try:
+                await call.message.delete()
+            except:
+                pass
+
+            await call.message.answer(
+                f"✅ Вы взяли заказ #{order_id}\n\n"
+                f"{order_info(order_id, amount, total_usdt, unique=is_unique)}",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
+                ])
+            )
+
+        await call.answer()
+
+    @dp.callback_query(F.data.startswith("sbp_done_"))
+    async def sbp_done(call: types.CallbackQuery):
+        order_id = int(call.data.split("_")[2])
+        uid = call.from_user.id
+
+        row = await db.db_fetchone(
+            "SELECT user_id, amount, total_usdt, amount_usdt, client_message_id, worker_message_id, status FROM orders WHERE id=$1 AND worker_id=$2",
+            order_id, uid
         )
-        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
+        if not row:
+            return await call.answer("❌ Заявка не найдена", show_alert=True)
+        if row["status"] == "DONE":
+            return await call.answer("✅ Заявка уже завершена", show_alert=True)
+
+        # Уведомляем клиента что перевод выполнен
+        amount = float(row["amount"])
         try:
-            await bot.delete_message(order["user_id"], order["client_message_id"])
+            await bot.edit_message_text(
+                chat_id=row["user_id"],
+                message_id=row["client_message_id"],
+                text=f"💸 Заявка #{order_id}\n\n"
+                     f"💸 Тип: Перевод по СБП\n"
+                     f"💰 Сумма: {amount:.2f} RUB\n\n"
+                     f"📊 Статус: 🟢 Перевод выполнен\n\n"
+                     f"✅ Исполнитель сообщает что перевод сделан.\n"
+                     f"Подтвердите получение или откройте спор.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")],
+                    [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
+                    [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+                ])
+            )
         except Exception as e:
-            logger.error(f"[take] delete old msg error: {e}")
+            logger.error(f"[sbp_done] edit client msg error: {e}")
 
         try:
             await call.message.delete()
         except:
             pass
-        await call.message.answer(
-            f"✅ Вы взяли заказ #{order_id}\n\n"
-            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}",
+
+        total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
+        commission = max(round(amount * 0.20, 2), 30)
+        total_rub = round(amount + commission, 2)
+        amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
+        commission_usdt = round(total_usdt - amount_usdt, 4)
+        worker_net_usdt = round(commission_usdt * 0.8, 4)
+        worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+
+        worker_msg = await call.message.answer(
+            f"⏳ Ожидаем подтверждения от клиента\n\n"
+            f"🆔 <b>ID заявки:</b> #{order_id}\n"
+            f"💸 <b>Услуга:</b> Перевод по СБП\n"
+            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
+            f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
-        await call.answer()
+        await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
+        await call.answer("✅ Клиент уведомлён", show_alert=True)
 
     @dp.callback_query(F.data.startswith("send_req_"))
     async def send_req(call: types.CallbackQuery):
@@ -279,7 +422,6 @@ def register_worker(dp, bot):
         status = order["status"]
         is_unique = order["is_unique"] or False
 
-        # Сохраняем реквизиты всегда — пригодится если потом откроется спор
         card_data = (
             f"🏦 Банк: {card['bank']}\n"
             f"💳 Номер карты: <code>{card['card_number']}</code>\n"
@@ -470,7 +612,6 @@ def register_worker(dp, bot):
         except:
             pass
 
-        # Сохраняем код всегда — пригодится если потом откроется спор
         await db.db_execute("UPDATE orders SET dispute_code=$1 WHERE id=$2", code, order_id)
 
         if status == "DISPUTE":
