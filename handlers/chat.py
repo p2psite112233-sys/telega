@@ -115,15 +115,16 @@ def register_chat(dp, bot):
         except:
             pass
         row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
-        if row:
-            if uid == row["worker_id"]:
-                call.data = f"chat_view_order_{order_id}"
-                await chat_view_order(call)
-            else:
-                call.data = f"chat_view_client_order_{order_id}"
-                await chat_view_client_order(call)
+        if not row:
+            return
+        if uid == row["worker_id"]:
+            await bot.send_message(uid, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
+            ]))
         else:
-            await call.answer()
+            await bot.send_message(uid, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_client_order_{order_id}")]
+            ]))
 
     @dp.callback_query(F.data.startswith("chat_view_client_order_"))
     async def chat_view_client_order(call: types.CallbackQuery):
