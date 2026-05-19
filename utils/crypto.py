@@ -68,6 +68,26 @@ async def crypto_create_check_debug(amount_usdt: float) -> str:
                 return str(data)
     except Exception as e:
         return str(e)
+
+async def crypto_create_check(amount_usdt: float) -> dict | None:
+    """Создаёт чек в CryptoBot для выплаты воркеру."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{CRYPTO_API_URL}/createCheck",
+                headers={"Crypto-Pay-API-Token": CRYPTO_BOT_TOKEN},
+                json={
+                    "asset": "USDT",
+                    "amount": str(round(amount_usdt, 2))
+                }
+            ) as resp:
+                data = await resp.json()
+                print(f"[createCheck] response: {data}", flush=True)
+                if data.get("ok"):
+                    return data["result"]
+    except Exception as e:
+        print(f"[createCheck] error: {e}", flush=True)
+    return None
     """Создаёт чек в CryptoBot для выплаты воркеру."""
     try:
         async with aiohttp.ClientSession() as session:
