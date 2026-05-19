@@ -490,7 +490,7 @@ async def cleanup_expired_orders(bot: Bot):
 # --- ТАЙМЕР ЗАЯВКИ ---
 
 async def order_timeout(bot: Bot, order_id: int, user_id: int, total_usdt: float):
-    await asyncio.sleep(30)
+    await asyncio.sleep(1500)
     res = await db.db_execute(
         "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status='NEW'", order_id
     )
