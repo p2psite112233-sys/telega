@@ -9,6 +9,24 @@ import db
 logger = logging.getLogger(__name__)
 
 
+def order_info(order_id: int, amount: float, total_usdt: float) -> str:
+    commission = max(round(amount * 0.20, 2), 30)
+    total_rub = round(amount + commission, 2)
+    amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
+    commission_usdt = round(total_usdt - amount_usdt, 4)
+    worker_net_usdt = round(commission_usdt * 0.8, 4)
+    worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+    return (
+        f"🆔 <b>ID заявки:</b> #{order_id}\n"
+        f"💳 <b>Услуга:</b> Карта под оплату\n"
+        f"🃏 ❌ Обычная карта\n\n"
+        f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB (~{amount_usdt:.4f} USDT)\n"
+        f"💎 <b>Клиент оплатит:</b> {total_rub:.2f} RUB\n\n"
+        f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+        f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
+    )
+
+
 class ChatStates(StatesGroup):
     waiting_for_message = State()
 
@@ -58,11 +76,12 @@ def register_chat(dp, bot):
         except:
             pass
 
+        view_cb = f"chat_view_order_{order_id}" if role == "worker" else f"chat_view_client_order_{order_id}"
         msg = await call.message.answer(
             f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏪ Назад", callback_data=f"chat_back_{order_id}")]
+                [InlineKeyboardButton(text="⏪ Назад", callback_data=view_cb)]
             ])
         )
         await state.update_data(chat_prompt_msg_id=msg.message_id)
@@ -94,11 +113,12 @@ def register_chat(dp, bot):
         except:
             pass
 
+        view_cb = f"chat_view_order_{order_id}" if role == "worker" else f"chat_view_client_order_{order_id}"
         msg = await call.message.answer(
             f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏪ Назад", callback_data=f"chat_back_{order_id}")]
+                [InlineKeyboardButton(text="⏪ Назад", callback_data=view_cb)]
             ])
         )
         await state.update_data(chat_prompt_msg_id=msg.message_id)
@@ -206,7 +226,6 @@ def register_chat(dp, bot):
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
 
-        from handlers.worker import order_info
         amount = float(row["amount"])
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         card_data = row["dispute_card_data"] or ""
