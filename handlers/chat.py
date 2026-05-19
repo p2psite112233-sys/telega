@@ -104,6 +104,26 @@ def register_chat(dp, bot):
         await state.update_data(chat_prompt_msg_id=msg.message_id)
         await call.answer()
 
+    @dp.callback_query(F.data.startswith("chat_back_"), ChatStates.waiting_for_message)
+    async def chat_back(call: types.CallbackQuery, state: FSMContext):
+        await state.clear()
+        order_id = int(call.data.split("_")[2])
+        uid = call.from_user.id
+        try:
+            await call.message.delete()
+        except:
+            pass
+        row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
+        if row:
+            if uid == row["worker_id"]:
+                call.data = f"chat_view_order_{order_id}"
+                await chat_view_order(call)
+            else:
+                call.data = f"chat_view_client_order_{order_id}"
+                await chat_view_client_order(call)
+        else:
+            await call.answer()
+
     @dp.callback_query(F.data.startswith("chat_view_client_order_"))
     async def chat_view_client_order(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[4])
@@ -247,25 +267,7 @@ def register_chat(dp, bot):
         await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
 
-    @dp.callback_query(F.data.startswith("chat_back_"), ChatStates.waiting_for_message)
-    async def chat_back(call: types.CallbackQuery, state: FSMContext):
-        await state.clear()
-        order_id = int(call.data.split("_")[2])
-        uid = call.from_user.id
-        try:
-            await call.message.delete()
-        except:
-            pass
-        row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
-        if row:
-            if uid == row["worker_id"]:
-                call.data = f"chat_view_order_{order_id}"
-                await chat_view_order(call)
-            else:
-                call.data = f"chat_view_client_order_{order_id}"
-                await chat_view_client_order(call)
-        else:
-            await call.answer()
+
 
     @dp.message(ChatStates.waiting_for_message, F.text | F.photo)
     async def chat_send(message: types.Message, state: FSMContext):
