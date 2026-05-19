@@ -13,9 +13,6 @@ from utils.shared import get_role, set_role, workers
 
 logger = logging.getLogger(__name__)
 
-# Хранит ID сообщений рассылки: {order_id: {worker_id: message_id}}
-broadcast_msgs: dict = {}
-
 # --- FSM СОСТОЯНИЯ ---
 class ClientStates(StatesGroup):
     waiting_for_topup_amount = State()
@@ -42,9 +39,10 @@ async def broadcast_order(bot: Bot, text: str, kb: InlineKeyboardMarkup, order_i
         try:
             msg = await bot.send_message(w_id, text, reply_markup=kb, parse_mode="HTML")
             if order_id is not None:
-                if order_id not in broadcast_msgs:
-                    broadcast_msgs[order_id] = {}
-                broadcast_msgs[order_id][w_id] = msg.message_id
+                await db.db_execute(
+                    "INSERT INTO order_broadcasts (order_id, worker_id, message_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                    order_id, w_id, msg.message_id
+                )
             await asyncio.sleep(0.05)
         except Exception as e:
             logger.error(f"Broadcast error to {w_id}: {e}")
@@ -82,7 +80,40 @@ def register_common(dp, bot: Bot):
         except:
             return False
 
-    @dp.message(F.text == "/start")
+    async def try_attach_referrer(referred_id: int, referrer_id: int, from_username: str = None):
+        """Единая функция привязки реферера с жесткими проверками ролей и истории"""
+        # Воркеры и админы не могут быть чьими-то рефералами
+        if get_role(referred_id) in ["worker", "admin"]:
+            return
+
+        # Проверяем, что у пользователя вообще нет истории заказов
+        order_count = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1", referred_id)
+        if order_count and order_count["count"] > 0:
+            return
+
+        # Проверяем, нет ли уже существующей привязки в БД
+        existing = await db.db_fetchone("SELECT referred_id FROM referrals WHERE referred_id=$1", referred_id)
+        if existing:
+            return
+
+        # Атомарная вставка
+        res = await db.db_execute(
+            "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            referrer_id, referred_id
+        )
+        
+        # Отправляем уведомление только если запись реально создалась (INSERT 0 1)
+        if res and "INSERT 0 1" in res:
+            username = f"@{from_username}" if from_username else f"ID: {referred_id}"
+            try:
+                await bot.send_message(
+                    referrer_id,
+                    f"🎉 По вашей реферальной ссылке зарегистрировался {username}!"
+                )
+            except:
+                pass
+
+    @dp.message(F.text.startswith("/start"))
     async def start(message: types.Message, state: FSMContext):
         await state.clear()
         uid = message.from_user.id
@@ -93,16 +124,15 @@ def register_common(dp, bot: Bot):
             uid
         )
 
-        # Проверка подписки (только для клиентов, не для воркеров/админов)
+        # Логика рефералов для незарегистрированных/новых пользователей, которые не подписаны
         if role not in ["worker", "admin"]:
             is_subscribed = await check_subscription(uid)
             if not is_subscribed:
-                # Сохраняем реферера в state чтобы не потерять при проверке подписки
                 args = message.text.split()
                 if len(args) > 1:
                     try:
                         referrer_id = int(args[1])
-                        if referrer_id != uid:
+                        if referrer_id != uid and get_role(referrer_id) not in ["worker", "admin"]:
                             await state.update_data(pending_referrer=referrer_id)
                     except:
                         pass
@@ -118,41 +148,13 @@ def register_common(dp, bot: Bot):
                 )
                 return
 
-        # Привязываем реферера — только новым пользователям (зарегистрированным в последние 5 минут)
-        async def try_attach_referrer(referred_id: int, referrer_id: int):
-            # Проверяем что пользователь новый
-            new_check = await db.db_fetchone(
-                "SELECT created_at FROM balances WHERE user_id=$1 AND created_at > NOW() - INTERVAL '30 minutes'",
-                referred_id
-            )
-            if not new_check:
-                return
-            # Проверяем что реферер ещё не привязан
-            existing = await db.db_fetchone(
-                "SELECT referred_id FROM referrals WHERE referred_id=$1", referred_id
-            )
-            if existing:
-                return
-            res = await db.db_execute(
-                "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                referrer_id, referred_id
-            )
-            if res and "INSERT 0 1" in res:
-                username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {referred_id}"
-                try:
-                    await bot.send_message(
-                        referrer_id,
-                        f"🎉 По вашей реферальной ссылке зарегистрировался {username}!"
-                    )
-                except:
-                    pass
-
+        # Если пользователь подписан или имеет иммунитет (воркер/админ), пробуем привязать сразу
         args = message.text.split()
         if len(args) > 1:
             try:
                 referrer_id = int(args[1])
                 if referrer_id != uid:
-                    await try_attach_referrer(uid, referrer_id)
+                    await try_attach_referrer(uid, referrer_id, message.from_user.username)
             except:
                 pass
 
@@ -210,29 +212,15 @@ def register_common(dp, bot: Bot):
         if not is_subscribed:
             return await call.answer("❌ Вы ещё не подписались на канал!", show_alert=True)
 
-        # Привязываем реферера если был сохранён
+        # Вытаскиваем отложенного реферера, если он был
         data = await state.get_data()
         pending_referrer = data.get("pending_referrer")
         if pending_referrer:
-            new_check = await db.db_fetchone(
-                "SELECT created_at FROM balances WHERE user_id=$1 AND created_at > NOW() - INTERVAL '30 minutes'", uid
-            )
-            existing = await db.db_fetchone("SELECT referred_id FROM referrals WHERE referred_id=$1", uid)
-            if new_check and not existing:
-                res = await db.db_execute(
-                    "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                    pending_referrer, uid
-                )
-                if res and "INSERT 0 1" in res:
-                    username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
-                    try:
-                        await bot.send_message(pending_referrer, f"🎉 По вашей реферальной ссылке зарегистрировался {username}!")
-                    except:
-                        pass
+            await try_attach_referrer(uid, pending_referrer, call.from_user.username)
             await state.update_data(pending_referrer=None)
 
         await call.message.delete()
-        # Показываем главное меню
+        
         text = (
             "<b>🏠 Send$Paid — Главное меню</b>\n\n"
             "<blockquote>Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
@@ -390,7 +378,6 @@ def register_common(dp, bot: Bot):
         sum_msg_id = data.get("sum_msg_id")
         await state.clear()
 
-        # Удаляем сообщение с суммой и введённое число
         try:
             await message.delete()
         except:
@@ -458,7 +445,6 @@ def register_common(dp, bot: Bot):
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
         ])
         await broadcast_order(bot, text_order, kb, order_id=order_id)
-        asyncio.create_task(order_timeout(bot, order_id, uid, total_usdt))
 
     # --- ДОБАВЛЕНИЕ КАРТЫ ВОРКЕРОМ ---
 
@@ -511,8 +497,11 @@ def register_common(dp, bot: Bot):
     async def cmd_set_worker(message: types.Message):
         if message.from_user.id != ADMIN_ID:
             return
+        parts = message.text.split()
+        if len(parts) < 2:
+            return await message.answer("❌ Укажите ID. Пример: /setworker 12345")
         try:
-            target_id = int(message.text.split()[1])
+            target_id = int(parts[1])
             await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", target_id)
             set_role(target_id, "worker")
             await message.answer(f"✅ ID {target_id} теперь WORKER")
@@ -524,20 +513,29 @@ def register_common(dp, bot: Bot):
 
 async def cleanup_expired_orders(bot: Bot):
     while True:
-        await asyncio.sleep(300)
+        await asyncio.sleep(60)
         try:
-            expired = await db.db_fetchall(
-                "SELECT id, user_id, total_usdt, client_message_id FROM orders WHERE status='NEW' AND created_at < NOW() - INTERVAL '25 minutes'"
-            )
+            # Атомарно отменяем просроченные ордера ОДНИМ запросом (через RETURNING)
+            expired = await db.db_fetchall("SELECT * FROM cancel_expired_orders()")
+            if not expired:
+                continue
+            
             for order in expired:
-                res = await db.db_execute(
-                    "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status='NEW'", order["id"]
-                )
-                if "UPDATE 0" in res:
-                    continue
-                await db.unfreeze_back(order["user_id"], float(order["total_usdt"] or 0))
-                broadcast_msgs.pop(order["id"], None)
                 logger.info(f"Cleanup: Order #{order['id']} cancelled")
+                broadcasts = await db.db_fetchall(
+                    "SELECT worker_id, message_id FROM order_broadcasts WHERE order_id=$1", order["id"]
+                )
+                for b in broadcasts:
+                    try:
+                        await bot.edit_message_text(
+                            chat_id=b["worker_id"],
+                            message_id=b["message_id"],
+                            text=f"❌ Заявка #{order['id']} — срок истёк\n\nКлиент не дождался исполнителя."
+                        )
+                        await asyncio.sleep(0.05)
+                    except:
+                        pass
+                await db.db_execute("DELETE FROM order_broadcasts WHERE order_id=$1", order["id"])
                 try:
                     if order["client_message_id"]:
                         await bot.edit_message_text(
@@ -552,46 +550,6 @@ async def cleanup_expired_orders(bot: Bot):
                         pass
         except Exception as e:
             logger.error(f"[cleanup] error: {e}")
-
-
-# --- ТАЙМЕР ЗАЯВКИ ---
-
-async def order_timeout(bot: Bot, order_id: int, user_id: int, total_usdt: float):
-    await asyncio.sleep(1500)
-    res = await db.db_execute(
-        "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status='NEW'", order_id
-    )
-    if "UPDATE 0" in res:
-        broadcast_msgs.pop(order_id, None)
-        return  # Уже взята или отменена
-    await db.unfreeze_back(user_id, total_usdt)
-    # Редактируем сообщения у воркеров
-    msgs = broadcast_msgs.pop(order_id, {})
-    for w_id, msg_id in msgs.items():
-        try:
-            await bot.edit_message_text(
-                chat_id=w_id,
-                message_id=msg_id,
-                text=f"❌ Заявка #{order_id} — срок истёк\n\nКлиент не дождался исполнителя."
-            )
-            await asyncio.sleep(0.05)
-        except:
-            pass
-    # Уведомляем клиента
-    try:
-        row = await db.db_fetchone("SELECT client_message_id FROM orders WHERE id=$1", order_id)
-        if row and row["client_message_id"]:
-            await bot.edit_message_text(
-                chat_id=user_id,
-                message_id=row["client_message_id"],
-                text=f"⏰ Заявка #{order_id} отменена\n\nНикто не взял заявку в течение 25 минут.\n💰 Средства возвращены на баланс."
-            )
-    except Exception as e:
-        logger.error(f"[order_timeout] edit error: {e}")
-        try:
-            await bot.send_message(user_id, f"⏰ Заявка #{order_id} отменена — никто не взял в течение 25 минут.\n💰 Средства возвращены на баланс.")
-        except:
-            pass
 
 
 # --- ЦИКЛ ПРОВЕРКИ ОПЛАТЫ ---
@@ -609,18 +567,21 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
             if "UPDATE 1" in res:
                 await db.add_balance(user_id, to_credit)
                 balance = await db.get_balance(user_id)
-                # Начисляем 3% рефереру
+                
+                # Начисляем 3% рефереру (с защитой от выплат за воркеров)
                 try:
                     ref_row = await db.db_fetchone(
                         "SELECT referrer_id FROM referrals WHERE referred_id=$1", user_id
                     )
                     if ref_row and ref_row["referrer_id"]:
-                        bonus = round(to_credit * 0.03, 4)
-                        await db.add_balance(ref_row["referrer_id"], bonus)
-                        await bot.send_message(
-                            ref_row["referrer_id"],
-                            f"🎁 Реферальный бонус!\n\nВаш реферал пополнил баланс.\n💎 Начислено: +{bonus:.4f} USDT"
-                        )
+                        # Проверяем роль реферера на всякий случай
+                        if get_role(ref_row["referrer_id"]) not in ["worker", "admin"]:
+                            bonus = round(to_credit * 0.03, 4)
+                            await db.add_balance(ref_row["referrer_id"], bonus)
+                            await bot.send_message(
+                                ref_row["referrer_id"],
+                                f"🎁 Реферальный бонус!\n\nВаш реферал пополнил баланс.\n💎 Начислено: +{bonus:.4f} USDT"
+                            )
                 except Exception as e:
                     logger.error(f"[referral bonus] error: {e}")
                 try:
