@@ -386,7 +386,10 @@ def register_client(dp, bot):
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
-            status_text = "✅ Завершена" if row["status"] == "DONE" else "❌ Отменена"
+            if row["status"] == "DONE": status_text = "✅ Завершена"
+            elif row["status"] == "IN_PROGRESS": status_text = "🟢 В работе"
+            elif row["status"] == "CANCELLED": status_text = "❌ Отменена"
+            else: status_text = "🟡 Новая"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]])
             await bot.send_message(
                 chat_id,
