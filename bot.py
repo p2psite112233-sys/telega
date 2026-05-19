@@ -12,7 +12,7 @@ print("==> Starting bot...", flush=True)
 
 from config import BOT_TOKEN
 from db import init_db
-from handlers.common import register_common, load_workers
+from handlers.common import register_common, load_workers, cleanup_expired_orders
 from handlers.worker import register_worker
 from handlers.client import register_client
 from handlers.admin import register_admin
@@ -65,6 +65,7 @@ async def main():
     await load_workers()
     asyncio.create_task(keep_alive())
     asyncio.create_task(run_web())
+    asyncio.create_task(cleanup_expired_orders(bot))
     await dp.start_polling(bot, skip_updates=True)
 
 if __name__ == "__main__":
