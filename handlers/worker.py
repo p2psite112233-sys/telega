@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from aiogram import types, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -165,6 +166,22 @@ def register_worker(dp, bot):
         )
         if "UPDATE 0" in res:
             return await call.answer("❌ Заявку уже забрали!", show_alert=True)
+
+        # Убираем кнопки у остальных воркеров
+        from handlers.common import broadcast_msgs
+        msgs = broadcast_msgs.pop(order_id, {})
+        for w_id, msg_id in msgs.items():
+            if w_id == uid:
+                continue
+            try:
+                await bot.edit_message_text(
+                    chat_id=w_id,
+                    message_id=msg_id,
+                    text=f"⚙️ Заявка #{order_id} уже принята другим исполнителем."
+                )
+                await asyncio.sleep(0.05)
+            except:
+                pass
 
         order = await db.db_fetchone("SELECT user_id, amount, client_message_id, total_usdt, is_unique FROM orders WHERE id=$1", order_id)
         amount = float(order["amount"])
