@@ -323,19 +323,53 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
-        if call.data == "lk_history":
-            done_orders = await db.db_fetchall(
-                "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('DONE', 'CANCELLED') ORDER BY id DESC LIMIT 20", uid
-            )
-            if not done_orders:
-                await bot.send_message(chat_id, "📚 История заявок пуста")
+        if call.data.startswith("lk_history"):
+            parts = call.data.split("_")
+            filter_type = parts[2] if len(parts) > 2 else "all"
+            if filter_type == "all":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 30", uid
+                )
+            elif filter_type == "done":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 30", uid
+                )
+            elif filter_type == "active":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC LIMIT 30", uid
+                )
+            elif filter_type == "cancelled":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 30", uid
+                )
+            else:
+                orders = []
+            filter_kb = [
+                [
+                    InlineKeyboardButton(text="📋 Все", callback_data="lk_history_all"),
+                    InlineKeyboardButton(text="✅ Закрыто", callback_data="lk_history_done"),
+                    InlineKeyboardButton(text="🟢 Активные", callback_data="lk_history_active"),
+                    InlineKeyboardButton(text="❌ Отмена", callback_data="lk_history_cancelled"),
+                ]
+            ]
+            if not orders:
+                filter_kb.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
+                await bot.send_photo(
+                    chat_id, photo=PROFILE_BANNER_FILE_ID,
+                    caption="<b>📚 История воркера</b>\n\n<blockquote>Заявок не найдено.</blockquote>",
+                    parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=filter_kb)
+                )
                 return await call.answer()
-            buttons = []
-            for order in done_orders:
+            buttons = list(filter_kb)
+            for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
-                icon = "✅" if order["status"] == "DONE" else "❌"
+                status = order["status"]
+                if status == "DONE": icon = "✅"
+                elif status == "IN_PROGRESS": icon = "🟢"
+                elif status == "CANCELLED": icon = "❌"
+                else: icon = "🟡"
                 buttons.append([InlineKeyboardButton(
-                    text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.2f} USDT",
+                    text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"worker_history_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
@@ -362,29 +396,53 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
-        if call.data == "client_history":
-            active_orders = await db.db_fetchall(
-                "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC", uid
-            )
-            done_orders = await db.db_fetchall(
-                "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('DONE', 'CANCELLED') ORDER BY id DESC LIMIT 20", uid
-            )
-            if not active_orders and not done_orders:
-                await bot.send_message(chat_id, "📚 История заявок пуста")
+        if call.data.startswith("client_history"):
+            parts = call.data.split("_")
+            filter_type = parts[2] if len(parts) > 2 else "all"
+            if filter_type == "all":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 30", uid
+                )
+            elif filter_type == "done":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 30", uid
+                )
+            elif filter_type == "active":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC LIMIT 30", uid
+                )
+            elif filter_type == "cancelled":
+                orders = await db.db_fetchall(
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 30", uid
+                )
+            else:
+                orders = []
+            filter_kb = [
+                [
+                    InlineKeyboardButton(text="📋 Все", callback_data="client_history_all"),
+                    InlineKeyboardButton(text="✅ Закрыто", callback_data="client_history_done"),
+                    InlineKeyboardButton(text="🟢 Активные", callback_data="client_history_active"),
+                    InlineKeyboardButton(text="❌ Отмена", callback_data="client_history_cancelled"),
+                ]
+            ]
+            if not orders:
+                filter_kb.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
+                await bot.send_photo(
+                    chat_id, photo=PROFILE_BANNER_FILE_ID,
+                    caption="<b>📚 История клиента</b>\n\n<blockquote>Заявок не найдено.</blockquote>",
+                    parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=filter_kb)
+                )
                 return await call.answer()
-            buttons = []
-            for order in active_orders:
-                status_icon = "🟡" if order["status"] == "NEW" else "🟢"
-                status_name = "Новая" if order["status"] == "NEW" else "В работе"
-                buttons.append([InlineKeyboardButton(
-                    text=f"{status_icon} #{order['id']} — {float(order['amount']):.0f} RUB ({status_name})",
-                    callback_data=f"history_order_{order['id']}"
-                )])
-            for order in done_orders:
+            buttons = list(filter_kb)
+            for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
-                icon = "✅" if order["status"] == "DONE" else "❌"
+                status = order["status"]
+                if status == "DONE": icon = "✅"
+                elif status == "IN_PROGRESS": icon = "🟢"
+                elif status == "CANCELLED": icon = "❌"
+                else: icon = "🟡"
                 buttons.append([InlineKeyboardButton(
-                    text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB → {total_usdt:.2f} USDT",
+                    text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"history_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
