@@ -13,6 +13,9 @@ from utils.shared import get_role, set_role, workers
 
 logger = logging.getLogger(__name__)
 
+# Хранит ID сообщений рассылки: {order_id: {worker_id: message_id}}
+broadcast_msgs: dict = {}
+
 # --- FSM СОСТОЯНИЯ ---
 class ClientStates(StatesGroup):
     waiting_for_topup_amount = State()
@@ -33,11 +36,15 @@ menu = ReplyKeyboardMarkup(
 )
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
-async def broadcast_order(bot: Bot, text: str, kb: InlineKeyboardMarkup):
+async def broadcast_order(bot: Bot, text: str, kb: InlineKeyboardMarkup, order_id: int = None):
     """Рассылка воркерам с защитой от лимитов Telegram"""
     for w_id in workers:
         try:
-            await bot.send_message(w_id, text, reply_markup=kb, parse_mode="HTML")
+            msg = await bot.send_message(w_id, text, reply_markup=kb, parse_mode="HTML")
+            if order_id is not None:
+                if order_id not in broadcast_msgs:
+                    broadcast_msgs[order_id] = {}
+                broadcast_msgs[order_id][w_id] = msg.message_id
             await asyncio.sleep(0.05)
         except Exception as e:
             logger.error(f"Broadcast error to {w_id}: {e}")
@@ -383,7 +390,8 @@ def register_common(dp, bot: Bot):
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
         ])
-        await broadcast_order(bot, text_order, kb)
+        await broadcast_order(bot, text_order, kb, order_id=order_id)
+        asyncio.create_task(order_timeout(bot, order_id, uid, total_usdt))
 
     # --- ДОБАВЛЕНИЕ КАРТЫ ВОРКЕРОМ ---
 
@@ -443,6 +451,80 @@ def register_common(dp, bot: Bot):
             await message.answer(f"✅ ID {target_id} теперь WORKER")
         except:
             await message.answer("Ошибка. Пример: /setworker 12345")
+
+
+# --- ГЛОБАЛЬНЫЙ МУСОРЩИК ---
+
+async def cleanup_expired_orders(bot: Bot):
+    while True:
+        await asyncio.sleep(300)
+        try:
+            expired = await db.db_fetchall(
+                "SELECT id, user_id, total_usdt, client_message_id FROM orders WHERE status='NEW' AND created_at < NOW() - INTERVAL '25 minutes'"
+            )
+            for order in expired:
+                res = await db.db_execute(
+                    "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status='NEW'", order["id"]
+                )
+                if "UPDATE 0" in res:
+                    continue
+                await db.unfreeze_back(order["user_id"], float(order["total_usdt"] or 0))
+                broadcast_msgs.pop(order["id"], None)
+                logger.info(f"Cleanup: Order #{order['id']} cancelled")
+                try:
+                    if order["client_message_id"]:
+                        await bot.edit_message_text(
+                            chat_id=order["user_id"],
+                            message_id=order["client_message_id"],
+                            text=f"⏰ Заявка #{order['id']} отменена\n\nНикто не взял заявку в течение 25 минут.\n💰 Средства возвращены на баланс."
+                        )
+                except:
+                    try:
+                        await bot.send_message(order["user_id"], f"⏰ Заявка #{order['id']} отменена.\n💰 Средства возвращены на баланс.")
+                    except:
+                        pass
+        except Exception as e:
+            logger.error(f"[cleanup] error: {e}")
+
+
+# --- ТАЙМЕР ЗАЯВКИ ---
+
+async def order_timeout(bot: Bot, order_id: int, user_id: int, total_usdt: float):
+    await asyncio.sleep(1500)
+    res = await db.db_execute(
+        "UPDATE orders SET status='CANCELLED' WHERE id=$1 AND status='NEW'", order_id
+    )
+    if "UPDATE 0" in res:
+        broadcast_msgs.pop(order_id, None)
+        return  # Уже взята или отменена
+    await db.unfreeze_back(user_id, total_usdt)
+    # Редактируем сообщения у воркеров
+    msgs = broadcast_msgs.pop(order_id, {})
+    for w_id, msg_id in msgs.items():
+        try:
+            await bot.edit_message_text(
+                chat_id=w_id,
+                message_id=msg_id,
+                text=f"❌ Заявка #{order_id} — срок истёк\n\nКлиент не дождался исполнителя."
+            )
+            await asyncio.sleep(0.05)
+        except:
+            pass
+    # Уведомляем клиента
+    try:
+        row = await db.db_fetchone("SELECT client_message_id FROM orders WHERE id=$1", order_id)
+        if row and row["client_message_id"]:
+            await bot.edit_message_text(
+                chat_id=user_id,
+                message_id=row["client_message_id"],
+                text=f"⏰ Заявка #{order_id} отменена\n\nНикто не взял заявку в течение 25 минут.\n💰 Средства возвращены на баланс."
+            )
+    except Exception as e:
+        logger.error(f"[order_timeout] edit error: {e}")
+        try:
+            await bot.send_message(user_id, f"⏰ Заявка #{order_id} отменена — никто не взял в течение 25 минут.\n💰 Средства возвращены на баланс.")
+        except:
+            pass
 
 
 # --- ЦИКЛ ПРОВЕРКИ ОПЛАТЫ ---
