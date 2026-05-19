@@ -166,9 +166,10 @@ def register_worker(dp, bot):
         if "UPDATE 0" in res:
             return await call.answer("❌ Заявку уже забрали!", show_alert=True)
 
-        order = await db.db_fetchone("SELECT user_id, amount, client_message_id, total_usdt FROM orders WHERE id=$1", order_id)
+        order = await db.db_fetchone("SELECT user_id, amount, client_message_id, total_usdt, is_unique FROM orders WHERE id=$1", order_id)
         amount = float(order["amount"])
         total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0.0
+        is_unique = order["is_unique"] or False
 
         new_msg = await bot.send_message(
             chat_id=order["user_id"],
@@ -196,7 +197,7 @@ def register_worker(dp, bot):
             pass
         await call.message.answer(
             f"✅ Вы взяли заказ #{order_id}\n\n"
-            f"{order_info(order_id, amount, total_usdt)}",
+            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
@@ -247,7 +248,7 @@ def register_worker(dp, bot):
             card_id, uid
         )
         order = await db.db_fetchone(
-            "SELECT user_id, amount, client_message_id, total_usdt, status FROM orders WHERE id=$1 AND worker_id=$2",
+            "SELECT user_id, amount, client_message_id, total_usdt, status, is_unique FROM orders WHERE id=$1 AND worker_id=$2",
             order_id, uid
         )
         if not card or not order:
@@ -257,6 +258,7 @@ def register_worker(dp, bot):
         amount = float(order["amount"])
         total_usdt = float(order["total_usdt"]) if order.get("total_usdt") else 0.0
         status = order["status"]
+        is_unique = order["is_unique"] or False
 
         # Сохраняем реквизиты всегда — пригодится если потом откроется спор
         card_data = (
@@ -301,7 +303,7 @@ def register_worker(dp, bot):
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
         worker_msg = await call.message.answer(
             f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
-            f"{order_info(order_id, amount, total_usdt)}\n\n"
+            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
             f"⏳ Ожидаем запрос кода от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -345,9 +347,10 @@ def register_worker(dp, bot):
 
         worker_id = row["worker_id"]
         status = row["status"]
-        order = await db.db_fetchone("SELECT amount, total_usdt, dispute_reason, dispute_card_data FROM orders WHERE id=$1", order_id)
+        order = await db.db_fetchone("SELECT amount, total_usdt, dispute_reason, dispute_card_data, is_unique FROM orders WHERE id=$1", order_id)
         amount = float(order["amount"]) if order else 0.0
         total_usdt = float(order["total_usdt"]) if order and order["total_usdt"] else 0.0
+        is_unique = (order["is_unique"] or False) if order else False
 
         if status == "DISPUTE":
             d_reason = order["dispute_reason"] or "—"
@@ -386,7 +389,7 @@ def register_worker(dp, bot):
         new_worker_msg = await bot.send_message(
             worker_id,
             f"🔑 Клиент запросил код\n\n"
-            f"{order_info(order_id, amount, total_usdt)}",
+            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
@@ -425,7 +428,7 @@ def register_worker(dp, bot):
         code = message.text.strip()
 
         row = await db.db_fetchone(
-            "SELECT user_id, amount, total_usdt, client_message_id, status, dispute_reason, dispute_card_data FROM orders WHERE id=$1", order_id
+            "SELECT user_id, amount, total_usdt, client_message_id, status, dispute_reason, dispute_card_data, is_unique FROM orders WHERE id=$1", order_id
         )
         if not row:
             await state.clear()
@@ -436,6 +439,7 @@ def register_worker(dp, bot):
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         client_msg_id = row["client_message_id"]
         status = row["status"]
+        is_unique = row["is_unique"] or False
 
         if ask_code_msg_id:
             try:
@@ -483,7 +487,7 @@ def register_worker(dp, bot):
 
         worker_msg = await message.answer(
             f"✅ Код отправлен клиенту\n\n"
-            f"{order_info(order_id, amount, total_usdt)}\n\n"
+            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
             f"⏳ Ожидаем подтверждения от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
