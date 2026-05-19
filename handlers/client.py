@@ -143,6 +143,7 @@ def register_client(dp, bot):
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
+        & ~F.data.startswith("client_transfer")
         & ~F.data.startswith("send_req_")
         & ~F.data.startswith("worker_confirm_")
         & ~F.data.startswith("worker_apply")
@@ -389,7 +390,6 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
-            # Если заявка активна — показываем актуальное состояние
             if row["status"] == "IN_PROGRESS":
                 await bot.send_message(chat_id, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
@@ -474,7 +474,6 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
-            # Если заявка активна — показываем актуальное состояние
             if row["status"] in ("IN_PROGRESS", "DISPUTE"):
                 await bot.send_message(chat_id, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_client_order_{order_id}")]
