@@ -6,6 +6,7 @@ from aiogram.fsm.state import StatesGroup, State
 
 import db
 from utils.crypto import crypto_get_rate
+from handlers.common import broadcast_order
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,86 @@ def register_transfer(dp, bot):
 
     @dp.callback_query(F.data == "transfer_sbp_confirm")
     async def transfer_sbp_confirm(call: types.CallbackQuery, state: FSMContext):
-        await call.answer("🚧 Раздел в разработке", show_alert=True)
+        uid = call.from_user.id
+        data = await state.get_data()
+
+        amount = data["amount"]
+        phone = data["phone"]
+        bank = data["bank"]
+        name = data["name"]
+        total_usdt = data["total_usdt"]
+        commission = data["commission"]
+        total = data["total"]
+
+        amount_usdt = round(total_usdt * amount / total, 4) if total else 0.0
+
+        # Создаём заявку в БД
+        order_id = await db.create_order_safe(uid, amount, total_usdt, amount_usdt, False)
+        if order_id == 0:
+            balance = await db.get_balance(uid)
+            await state.clear()
+            try:
+                await call.message.delete()
+            except:
+                pass
+            return await call.message.answer(
+                f"❌ Недостаточно средств на балансе!\n\n"
+                f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
+                f"💰 Ваш баланс: {balance:.2f} USDT",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+                    [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+                ])
+            )
+
+        # Сохраняем реквизиты СБП
+        await db.db_execute(
+            "UPDATE orders SET transfer_type=$1, transfer_phone=$2, transfer_bank=$3, transfer_recipient_name=$4 WHERE id=$5",
+            "sbp", phone, bank, name, order_id
+        )
+
+        await state.clear()
+        try:
+            await call.message.delete()
+        except:
+            pass
+
+        # Сообщение клиенту
+        client_msg = await call.message.answer(
+            f"🎉 Заявка принята в обработку\n\n"
+            f"🆔 ID: #{order_id}\n"
+            f"💸 Тип: Перевод по СБП\n"
+            f"💰 Сумма: {amount:.2f} RUB\n"
+            f"📱 Телефон: <code>{phone}</code>\n"
+            f"🏦 Банк: {bank}\n"
+            f"👤 Получатель: {name}\n\n"
+            f"💎 К оплате: {total:.2f} RUB\n\n"
+            f"📊 Статус: 🟡 Новая\n"
+            f"👨‍💻 Исполнитель: назначается\n\n"
+            f"⏳ Ожидайте — скоро свяжемся с вами",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
+            ])
+        )
+        await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", client_msg.message_id, order_id)
+
+        # Рассылка воркерам
+        text_order = (
+            f"📥 <b>Новая заявка #{order_id}</b>\n\n"
+            f"💸 <b>Тип:</b> Перевод по СБП\n\n"
+            f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
+            f"📱 <b>Телефон:</b> <code>{phone}</code>\n"
+            f"🏦 <b>Банк:</b> {bank}\n"
+            f"👤 <b>Получатель:</b> {name}\n\n"
+            f"🔐 <b>Резерв:</b> {total_usdt:.4f} USDT\n"
+            f"⏱ Время на принятие: 1500 сек"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
+        ])
+        await broadcast_order(bot, text_order, kb, order_id=order_id)
+        await call.answer()
 
     @dp.callback_query(F.data == "transfer_card")
     async def transfer_card(call: types.CallbackQuery):
