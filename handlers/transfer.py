@@ -48,7 +48,7 @@ def register_transfer(dp, bot):
             pass
         await state.set_state(TransferStates.waiting_for_amount)
         await state.update_data(transfer_type="sbp")
-        await call.message.answer(
+        msg = await call.message.answer(
             "<b>📲 Перевод по СБП</b>\n\n"
             "Введите сумму перевода в рублях.\n\n"
             "Пример: <b>1000</b>",
@@ -57,6 +57,7 @@ def register_transfer(dp, bot):
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
             ])
         )
+        await state.update_data(last_msg_id=msg.message_id)
         await call.answer()
 
     @dp.message(TransferStates.waiting_for_amount)
@@ -68,9 +69,20 @@ def register_transfer(dp, bot):
         except ValueError:
             return await message.answer("❌ Введите корректную сумму, например <b>1000</b>", parse_mode="HTML")
 
+        data = await state.get_data()
+        # Удаляем предыдущее сообщение бота и сообщение пользователя
+        try:
+            await bot.delete_message(message.chat.id, data.get("last_msg_id"))
+        except:
+            pass
+        try:
+            await message.delete()
+        except:
+            pass
+
         await state.update_data(amount=amount)
         await state.set_state(TransferStates.waiting_for_phone)
-        await message.answer(
+        msg = await message.answer(
             "<b>📱 Номер телефона</b>\n\n"
             "Введите номер телефона получателя.\n\n"
             "Пример: <b>+79001234567</b>",
@@ -79,13 +91,25 @@ def register_transfer(dp, bot):
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
             ])
         )
+        await state.update_data(last_msg_id=msg.message_id)
 
     @dp.message(TransferStates.waiting_for_phone)
     async def process_transfer_phone(message: types.Message, state: FSMContext):
         phone = message.text.strip()
+
+        data = await state.get_data()
+        try:
+            await bot.delete_message(message.chat.id, data.get("last_msg_id"))
+        except:
+            pass
+        try:
+            await message.delete()
+        except:
+            pass
+
         await state.update_data(phone=phone)
         await state.set_state(TransferStates.waiting_for_bank)
-        await message.answer(
+        msg = await message.answer(
             "<b>🏦 Банк получателя</b>\n\n"
             "Введите название банка получателя.\n\n"
             "Пример: <b>Сбербанк</b>",
@@ -94,6 +118,7 @@ def register_transfer(dp, bot):
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
             ])
         )
+        await state.update_data(last_msg_id=msg.message_id)
 
     @dp.message(TransferStates.waiting_for_bank)
     async def process_transfer_bank(message: types.Message, state: FSMContext):
@@ -101,6 +126,15 @@ def register_transfer(dp, bot):
         data = await state.get_data()
         amount = data["amount"]
         phone = data["phone"]
+
+        try:
+            await bot.delete_message(message.chat.id, data.get("last_msg_id"))
+        except:
+            pass
+        try:
+            await message.delete()
+        except:
+            pass
 
         commission = max(round(amount * 0.20, 2), 30)
         total = round(amount + commission, 2)
