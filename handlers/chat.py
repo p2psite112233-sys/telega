@@ -106,6 +106,7 @@ def register_chat(dp, bot):
 
     @dp.callback_query(F.data.startswith("chat_back_"), ChatStates.waiting_for_message)
     async def chat_back(call: types.CallbackQuery, state: FSMContext):
+        await call.answer()
         await state.clear()
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
