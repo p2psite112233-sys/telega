@@ -68,8 +68,9 @@ async def crypto_create_check(amount_usdt: float) -> dict | None:
                 }
             ) as resp:
                 data = await resp.json()
+                print(f"[createCheck] response: {data}", flush=True)
                 if data.get("ok"):
                     return data["result"]
-    except:
-        pass
+    except Exception as e:
+        print(f"[createCheck] error: {e}", flush=True)
     return None
