@@ -6,10 +6,8 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-
 sys.stdout.reconfigure(line_buffering=True)
 print("==> Starting bot...", flush=True)
-
 from config import BOT_TOKEN
 from db import init_db
 from handlers.common import register_common, load_workers, cleanup_expired_orders
@@ -20,6 +18,7 @@ from handlers.apply import register_apply
 from handlers.dispute import register_dispute
 from handlers.chat import register_chat
 from handlers.withdraw import register_withdraw
+from handlers.transfer import register_transfer
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -32,6 +31,7 @@ register_client(dp, bot)
 register_apply(dp, bot)
 register_worker(dp, bot)
 register_withdraw(dp, bot)
+register_transfer(dp, bot)
 register_common(dp, bot)
 
 async def handle(request):
