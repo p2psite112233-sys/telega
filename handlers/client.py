@@ -328,19 +328,19 @@ def register_client(dp, bot):
             filter_type = parts[2] if len(parts) > 2 else "all"
             if filter_type == "all":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status IN ('IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 10", uid
                 )
             elif filter_type == "done":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 10", uid
                 )
             elif filter_type == "active":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC LIMIT 10", uid
                 )
             elif filter_type == "cancelled":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE worker_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 10", uid
                 )
             else:
                 orders = []
@@ -385,9 +385,14 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
+            # Если заявка активна — показываем актуальное состояние
+            if row["status"] == "IN_PROGRESS":
+                await bot.send_message(chat_id, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
+                ]))
+                return await call.answer()
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
             if row["status"] == "DONE": status_text = "✅ Завершена"
-            elif row["status"] == "IN_PROGRESS": status_text = "🟢 В работе"
             elif row["status"] == "CANCELLED": status_text = "❌ Отменена"
             else: status_text = "🟡 Новая"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]])
@@ -404,19 +409,19 @@ def register_client(dp, bot):
             filter_type = parts[2] if len(parts) > 2 else "all"
             if filter_type == "all":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS', 'DONE', 'CANCELLED') ORDER BY id DESC LIMIT 10", uid
                 )
             elif filter_type == "done":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='DONE' ORDER BY id DESC LIMIT 10", uid
                 )
             elif filter_type == "active":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS') ORDER BY id DESC LIMIT 10", uid
                 )
             elif filter_type == "cancelled":
                 orders = await db.db_fetchall(
-                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 30", uid
+                    "SELECT id, amount, total_usdt, status FROM orders WHERE user_id=$1 AND status='CANCELLED' ORDER BY id DESC LIMIT 10", uid
                 )
             else:
                 orders = []
@@ -461,17 +466,20 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
+            # Если заявка активна — показываем актуальное состояние
+            if row["status"] in ("IN_PROGRESS", "DISPUTE"):
+                await bot.send_message(chat_id, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_client_order_{order_id}")]
+                ]))
+                return await call.answer()
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
             status = row["status"]
             if status == "DONE": status_text = "✅ Завершена"
-            elif status == "IN_PROGRESS": status_text = "🟢 В работе"
             elif status == "CANCELLED": status_text = "❌ Отменена"
-            else: status_text = "🟡 Новая"
+            elif status == "NEW": status_text = "🟡 Новая"
+            else: status_text = status
             buttons = [[InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]]
             if status == "NEW":
-                buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
-            elif status == "IN_PROGRESS":
-                buttons.insert(0, [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{row['id']}")])
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
             await bot.send_message(
                 chat_id,
