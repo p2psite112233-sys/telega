@@ -348,8 +348,8 @@ def register_common(dp, bot: Bot):
             )
 
         row = await db.db_fetchone(
-            "INSERT INTO orders (user_id, amount, status, total_usdt, amount_usdt) VALUES ($1, $2, 'NEW', $3, $4) RETURNING id",
-            uid, rub, total_usdt, amount_usdt
+            "INSERT INTO orders (user_id, amount, status, total_usdt, amount_usdt, is_unique) VALUES ($1, $2, 'NEW', $3, $4, $5) RETURNING id",
+            uid, rub, total_usdt, amount_usdt, unique
         )
         order_id = row["id"]
 
