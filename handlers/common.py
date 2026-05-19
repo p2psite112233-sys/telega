@@ -93,32 +93,19 @@ def register_common(dp, bot: Bot):
             uid
         )
 
-        # Сохраняем реферера если пришёл по ссылке
-        args = message.text.split()
-        if len(args) > 1:
-            try:
-                referrer_id = int(args[1])
-                if referrer_id != uid:
-                    res = await db.db_execute(
-                        "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                        referrer_id, uid
-                    )
-                    if "INSERT 0 1" in res:
-                        username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
-                        try:
-                            await bot.send_message(
-                                referrer_id,
-                                f"🎉 По вашей реферальной ссылке зарегистрировался {username}!"
-                            )
-                        except:
-                            pass
-            except:
-                pass
-
         # Проверка подписки (только для клиентов, не для воркеров/админов)
         if role not in ["worker", "admin"]:
             is_subscribed = await check_subscription(uid)
             if not is_subscribed:
+                # Сохраняем реферера в state чтобы не потерять при проверке подписки
+                args = message.text.split()
+                if len(args) > 1:
+                    try:
+                        referrer_id = int(args[1])
+                        if referrer_id != uid:
+                            await state.update_data(pending_referrer=referrer_id)
+                    except:
+                        pass
                 await message.answer_sticker(WELCOME_STICKER_ID)
                 await message.answer(
                     "👋 Добро пожаловать в <b>Send$Paid</b>!\n\n"
@@ -130,6 +117,44 @@ def register_common(dp, bot: Bot):
                     ])
                 )
                 return
+
+        # Привязываем реферера — только новым пользователям (зарегистрированным в последние 5 минут)
+        async def try_attach_referrer(referred_id: int, referrer_id: int):
+            # Проверяем что пользователь новый
+            new_check = await db.db_fetchone(
+                "SELECT created_at FROM balances WHERE user_id=$1 AND created_at > NOW() - INTERVAL '30 minutes'",
+                referred_id
+            )
+            if not new_check:
+                return
+            # Проверяем что реферер ещё не привязан
+            existing = await db.db_fetchone(
+                "SELECT referred_id FROM referrals WHERE referred_id=$1", referred_id
+            )
+            if existing:
+                return
+            res = await db.db_execute(
+                "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                referrer_id, referred_id
+            )
+            if res and "INSERT 0 1" in res:
+                username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {referred_id}"
+                try:
+                    await bot.send_message(
+                        referrer_id,
+                        f"🎉 По вашей реферальной ссылке зарегистрировался {username}!"
+                    )
+                except:
+                    pass
+
+        args = message.text.split()
+        if len(args) > 1:
+            try:
+                referrer_id = int(args[1])
+                if referrer_id != uid:
+                    await try_attach_referrer(uid, referrer_id)
+            except:
+                pass
 
         if role in ["worker", "admin"]:
             worker_text = (
@@ -184,6 +209,28 @@ def register_common(dp, bot: Bot):
         is_subscribed = await check_subscription(uid)
         if not is_subscribed:
             return await call.answer("❌ Вы ещё не подписались на канал!", show_alert=True)
+
+        # Привязываем реферера если был сохранён
+        data = await state.get_data()
+        pending_referrer = data.get("pending_referrer")
+        if pending_referrer:
+            new_check = await db.db_fetchone(
+                "SELECT created_at FROM balances WHERE user_id=$1 AND created_at > NOW() - INTERVAL '30 minutes'", uid
+            )
+            existing = await db.db_fetchone("SELECT referred_id FROM referrals WHERE referred_id=$1", uid)
+            if new_check and not existing:
+                res = await db.db_execute(
+                    "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    pending_referrer, uid
+                )
+                if res and "INSERT 0 1" in res:
+                    username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
+                    try:
+                        await bot.send_message(pending_referrer, f"🎉 По вашей реферальной ссылке зарегистрировался {username}!")
+                    except:
+                        pass
+            await state.update_data(pending_referrer=None)
+
         await call.message.delete()
         # Показываем главное меню
         text = (
@@ -361,10 +408,14 @@ def register_common(dp, bot: Bot):
         total = round(rub + commission, 2)
 
         rate = await crypto_get_rate()
-        total_usdt = round(total / rate, 4)
-        amount_usdt = round(rub / rate, 4)  # Чистая сумма без комиссии
+        if not rate:
+            return await message.answer("❌ Ошибка получения курса. Попробуйте позже.")
 
-        if not await db.freeze_balance(uid, total_usdt):
+        total_usdt = round(total / rate, 4)
+        amount_usdt = round(rub / rate, 4)
+
+        order_id = await db.create_order_safe(uid, rub, total_usdt, amount_usdt, unique)
+        if order_id == 0:
             balance = await db.get_balance(uid)
             return await message.answer(
                 f"❌ Недостаточно средств на балансе!\n\n"
@@ -375,12 +426,6 @@ def register_common(dp, bot: Bot):
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
-
-        row = await db.db_fetchone(
-            "INSERT INTO orders (user_id, amount, status, total_usdt, amount_usdt, is_unique) VALUES ($1, $2, 'NEW', $3, $4, $5) RETURNING id",
-            uid, rub, total_usdt, amount_usdt, unique
-        )
-        order_id = row["id"]
 
         unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
 
