@@ -67,7 +67,10 @@ def register_withdraw(dp, bot):
                 amount, uid
             )
             await state.clear()
-            return await message.answer("❌ Ошибка создания чека. Попробуйте позже.")
+            # Пробуем получить детали ошибки
+            from utils.crypto import crypto_create_check_debug
+            error_info = await crypto_create_check_debug(amount)
+            return await message.answer(f"❌ Ошибка создания чека:\n<code>{error_info}</code>", parse_mode="HTML")
 
         # Сохраняем вывод в БД
         await db.db_execute(
