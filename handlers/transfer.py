@@ -51,7 +51,7 @@ def register_transfer(dp, bot):
         await state.update_data(transfer_type="sbp")
         msg = await call.message.answer(
             "<b>📲 Перевод по СБП</b>\n\n"
-            "Введите сумму перевода в рублях.\n\n"
+            "<blockquote>Введите сумму перевода в рублях.</blockquote>\n\n"
             "Пример: <b>1000</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -84,7 +84,7 @@ def register_transfer(dp, bot):
         await state.set_state(TransferStates.waiting_for_phone)
         msg = await message.answer(
             "<b>📱 Номер телефона</b>\n\n"
-            "Введите номер телефона получателя.\n\n"
+            "<blockquote>Введите номер телефона получателя.</blockquote>\n\n"
             "Пример: <b>+79001234567</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -111,7 +111,7 @@ def register_transfer(dp, bot):
         await state.set_state(TransferStates.waiting_for_bank)
         msg = await message.answer(
             "<b>🏦 Банк получателя</b>\n\n"
-            "Введите название банка получателя.\n\n"
+            "<blockquote>Введите название банка получателя.</blockquote>\n\n"
             "Пример: <b>Сбербанк</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -138,8 +138,8 @@ def register_transfer(dp, bot):
         await state.set_state(TransferStates.waiting_for_name)
         msg = await message.answer(
             "<b>👤 Имя получателя</b>\n\n"
-            "Введите имя и фамилию получателя.\n\n"
-            "Пример: <b>Иван Иванов</b>",
+            "<blockquote>Введите имя и отчество получателя.</blockquote>\n\n"
+            "Пример: <b>Иван Иванович</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
