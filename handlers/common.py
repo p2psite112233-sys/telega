@@ -93,6 +93,28 @@ def register_common(dp, bot: Bot):
             uid
         )
 
+        # Сохраняем реферера если пришёл по ссылке
+        args = message.text.split()
+        if len(args) > 1:
+            try:
+                referrer_id = int(args[1])
+                if referrer_id != uid:
+                    res = await db.db_execute(
+                        "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                        referrer_id, uid
+                    )
+                    if "INSERT 0 1" in res:
+                        username = f"@{message.from_user.username}" if message.from_user.username else f"ID: {uid}"
+                        try:
+                            await bot.send_message(
+                                referrer_id,
+                                f"🎉 По вашей реферальной ссылке зарегистрировался {username}!"
+                            )
+                        except:
+                            pass
+            except:
+                pass
+
         # Проверка подписки (только для клиентов, не для воркеров/админов)
         if role not in ["worker", "admin"]:
             is_subscribed = await check_subscription(uid)
@@ -542,6 +564,20 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
             if "UPDATE 1" in res:
                 await db.add_balance(user_id, to_credit)
                 balance = await db.get_balance(user_id)
+                # Начисляем 3% рефереру
+                try:
+                    ref_row = await db.db_fetchone(
+                        "SELECT referrer_id FROM referrals WHERE referred_id=$1", user_id
+                    )
+                    if ref_row and ref_row["referrer_id"]:
+                        bonus = round(to_credit * 0.03, 4)
+                        await db.add_balance(ref_row["referrer_id"], bonus)
+                        await bot.send_message(
+                            ref_row["referrer_id"],
+                            f"🎁 Реферальный бонус!\n\nВаш реферал пополнил баланс.\n💎 Начислено: +{bonus:.4f} USDT"
+                        )
+                except Exception as e:
+                    logger.error(f"[referral bonus] error: {e}")
                 try:
                     await bot.send_message(
                         user_id,
