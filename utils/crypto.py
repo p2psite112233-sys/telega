@@ -55,7 +55,19 @@ async def crypto_check_invoice(invoice_id: int) -> str:
         pass
     return "unknown"
 
-async def crypto_create_check(amount_usdt: float) -> dict | None:
+async def crypto_create_check_debug(amount_usdt: float) -> str:
+    """Возвращает полный ответ CryptoBot для отладки."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{CRYPTO_API_URL}/createCheck",
+                headers={"Crypto-Pay-API-Token": CRYPTO_BOT_TOKEN},
+                json={"asset": "USDT", "amount": str(round(amount_usdt, 2))}
+            ) as resp:
+                data = await resp.json()
+                return str(data)
+    except Exception as e:
+        return str(e)
     """Создаёт чек в CryptoBot для выплаты воркеру."""
     try:
         async with aiohttp.ClientSession() as session:
