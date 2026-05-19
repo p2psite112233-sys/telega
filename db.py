@@ -67,6 +67,28 @@ async def init_db():
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         await conn.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
         await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_usdt NUMERIC(18,8) DEFAULT 0.0")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_unique BOOLEAN DEFAULT FALSE")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispute_card_data TEXT")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispute_code TEXT")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispute_reason TEXT")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispute_opened_by TEXT")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS code_requested BOOLEAN DEFAULT FALSE")
+        await conn.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP")
+        await conn.execute("ALTER TABLE balances ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS referrals (
+                referrer_id BIGINT,
+                referred_id BIGINT PRIMARY KEY
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS order_broadcasts (
+                order_id INT REFERENCES orders(id) ON DELETE CASCADE,
+                worker_id BIGINT,
+                message_id BIGINT,
+                PRIMARY KEY (order_id, worker_id)
+            )
+        """)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS worker_applications (
                 user_id BIGINT PRIMARY KEY,
