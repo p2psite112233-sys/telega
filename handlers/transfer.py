@@ -14,6 +14,7 @@ class TransferStates(StatesGroup):
     waiting_for_amount = State()
     waiting_for_phone = State()
     waiting_for_bank = State()
+    waiting_for_name = State()
 
 
 def register_transfer(dp, bot):
@@ -70,7 +71,6 @@ def register_transfer(dp, bot):
             return await message.answer("❌ Введите корректную сумму, например <b>1000</b>", parse_mode="HTML")
 
         data = await state.get_data()
-        # Удаляем предыдущее сообщение бота и сообщение пользователя
         try:
             await bot.delete_message(message.chat.id, data.get("last_msg_id"))
         except:
@@ -123,9 +123,37 @@ def register_transfer(dp, bot):
     @dp.message(TransferStates.waiting_for_bank)
     async def process_transfer_bank(message: types.Message, state: FSMContext):
         bank = message.text.strip()
+
+        data = await state.get_data()
+        try:
+            await bot.delete_message(message.chat.id, data.get("last_msg_id"))
+        except:
+            pass
+        try:
+            await message.delete()
+        except:
+            pass
+
+        await state.update_data(bank=bank)
+        await state.set_state(TransferStates.waiting_for_name)
+        msg = await message.answer(
+            "<b>👤 Имя получателя</b>\n\n"
+            "Введите имя и фамилию получателя.\n\n"
+            "Пример: <b>Иван Иванов</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
+            ])
+        )
+        await state.update_data(last_msg_id=msg.message_id)
+
+    @dp.message(TransferStates.waiting_for_name)
+    async def process_transfer_name(message: types.Message, state: FSMContext):
+        name = message.text.strip()
         data = await state.get_data()
         amount = data["amount"]
         phone = data["phone"]
+        bank = data["bank"]
 
         try:
             await bot.delete_message(message.chat.id, data.get("last_msg_id"))
@@ -142,14 +170,15 @@ def register_transfer(dp, bot):
         rate = await crypto_get_rate()
         total_usdt = round(total / rate, 4)
 
-        await state.update_data(bank=bank, commission=commission, total=total, total_usdt=total_usdt)
+        await state.update_data(name=name, commission=commission, total=total, total_usdt=total_usdt)
 
         await message.answer(
             f"<b>📋 Подтверждение заявки</b>\n\n"
             f"💸 <b>Тип:</b> Перевод по СБП\n"
             f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
             f"📱 <b>Номер телефона:</b> <code>{phone}</code>\n"
-            f"🏦 <b>Банк:</b> {bank}\n\n"
+            f"🏦 <b>Банк:</b> {bank}\n"
+            f"👤 <b>Получатель:</b> {name}\n\n"
             f"💼 <b>Комиссия сервиса:</b> {commission:.2f} RUB\n"
             f"💎 <b>Итого к оплате:</b> {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
             f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>",
