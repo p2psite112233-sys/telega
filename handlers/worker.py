@@ -372,11 +372,14 @@ def register_worker(dp, bot):
         worker_net_usdt = round(commission_usdt * 0.8, 4)
         worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
 
-        worker_msg = await call.message.answer(
-            f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-            f"💰 {amount:.2f} RUB\n\n"
-            f"⏳ Ожидаем подтверждения от клиента\n\n"
-            f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>",
+        worker_msg = await bot.send_message(
+            chat_id=uid,
+            text=(
+                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"⏳ Ожидаем подтверждения от клиента\n\n"
+                f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -601,6 +604,7 @@ def register_worker(dp, bot):
         order_id = data.get("active_order_id")
         ask_code_msg_id = data.get("ask_code_msg_id")
         code = message.text.strip()
+        worker_id = message.from_user.id
 
         row = await db.db_fetchone(
             "SELECT user_id, amount, total_usdt, client_message_id, status, dispute_reason, dispute_card_data, is_unique FROM orders WHERE id=$1", order_id
@@ -658,9 +662,20 @@ def register_worker(dp, bot):
             except Exception as e:
                 logger.error(f"[process_code] delete error: {e}")
 
-        worker_msg = await message.answer(
-            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
-            f"✅ Код отправлен · ⏳ Ждём подтверждения клиента",
+        # Удаляем старое сообщение воркера перед отправкой нового
+        try:
+            w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
+            if w_row and w_row["worker_message_id"]:
+                await bot.delete_message(chat_id=worker_id, message_id=w_row["worker_message_id"])
+        except:
+            pass
+
+        worker_msg = await bot.send_message(
+            chat_id=worker_id,
+            text=(
+                f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
+                f"✅ Код отправлен · ⏳ Ждём подтверждения клиента"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
