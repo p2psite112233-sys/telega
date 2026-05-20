@@ -17,40 +17,56 @@ class DisputeStates(StatesGroup):
     waiting_for_worker_screenshot = State()
 
 
-def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requested=False):
+def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requested=False,
+                      transfer_type=None, transfer_phone="", transfer_bank="", transfer_name=""):
     extra = ""
-    if card_data:
-        extra += f"💳 <b>Реквизиты для оплаты:</b>\n{card_data}\n\n"
-    if code_requested and not code:
-        extra += f"🔐 <b>Вы запросили код подтверждения, ожидайте.</b>\n⏳ ...\n\n"
-    if code:
-        extra += f"🔐 <b>Код подтверждения:</b> <code>{code}</code>\n\n"
+
+    # СБП реквизиты
+    if transfer_type == "sbp":
+        extra += f"📱 <b>Телефон:</b> <code>{transfer_phone}</code>\n"
+        extra += f"🏦 <b>Банк:</b> {transfer_bank}\n"
+        extra += f"👤 <b>Получатель:</b> {transfer_name}\n\n"
+    else:
+        # Карта под оплату
+        if card_data:
+            extra += f"💳 <b>Реквизиты для оплаты:</b>\n{card_data}\n\n"
+        if code_requested and not code:
+            extra += f"🔐 <b>Вы запросили код подтверждения, ожидайте.</b>\n⏳ ...\n\n"
+        if code:
+            extra += f"🔐 <b>Код подтверждения:</b> <code>{code}</code>\n\n"
+
     return (
-        f"🆘 <b>ВНИМАНИЕ: ОТКРЫТ СПОР</b>\n\n"
         f"🆔 <b>Заявка:</b> #{order_id}\n"
         f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
         f"{extra}"
         f"📝 <b>Причина:</b> {reason}\n\n"
-        f"⏳ <i>Средства заморожены. Администратор подключится в ближайшее время для вынесения вердикта.</i>"
+        f"⚠️ По сделке открыт спор"
     )
 
 
-def dispute_text(order_id, amount, reason, extra=""):
-    return build_dispute_msg(order_id, amount, reason)
-
-
-def dispute_client_kb(order_id):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
-        [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
-        [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
-        [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
-        [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
-    ])
+def dispute_client_kb(order_id, transfer_type=None):
+    buttons = []
+    if transfer_type == "sbp":
+        buttons.append([InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")])
+    else:
+        buttons.append([InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")])
+        buttons.append([InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")])
+    buttons.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
+    buttons.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
+    buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 async def update_client_dispute_msg(bot, order_id, user_id, amount, reason, card_data="", code="", code_requested=False):
-    row = await db.db_fetchone("SELECT client_message_id FROM orders WHERE id=$1", order_id)
+    row = await db.db_fetchone(
+        "SELECT client_message_id, transfer_type, transfer_phone, transfer_bank, transfer_recipient_name FROM orders WHERE id=$1",
+        order_id
+    )
+    transfer_type = row["transfer_type"] if row else None
+    transfer_phone = (row["transfer_phone"] or "") if row else ""
+    transfer_bank = (row["transfer_bank"] or "") if row else ""
+    transfer_name = (row["transfer_recipient_name"] or "") if row else ""
+
     if row and row["client_message_id"]:
         try:
             await bot.delete_message(chat_id=user_id, message_id=row["client_message_id"])
@@ -58,9 +74,11 @@ async def update_client_dispute_msg(bot, order_id, user_id, amount, reason, card
             pass
     new_msg = await bot.send_message(
         chat_id=user_id,
-        text=build_dispute_msg(order_id, amount, reason, card_data, code, code_requested),
+        text=build_dispute_msg(order_id, amount, reason, card_data, code, code_requested,
+                               transfer_type=transfer_type, transfer_phone=transfer_phone,
+                               transfer_bank=transfer_bank, transfer_name=transfer_name),
         parse_mode="HTML",
-        reply_markup=dispute_client_kb(order_id)
+        reply_markup=dispute_client_kb(order_id, transfer_type=transfer_type)
     )
     await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
 
@@ -155,11 +173,24 @@ def register_dispute(dp, bot):
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
 
-        row_order = await db.db_fetchone("SELECT amount, total_usdt, dispute_card_data, dispute_code FROM orders WHERE id=$1", order_id)
+        row_order = await db.db_fetchone(
+            "SELECT amount, total_usdt, dispute_card_data, dispute_code, transfer_type, transfer_phone, transfer_bank, transfer_recipient_name FROM orders WHERE id=$1",
+            order_id
+        )
         amount = float(row_order["amount"]) if row_order else 0
         total_usdt = float(row_order["total_usdt"]) if row_order else 0
-        card_data = row_order["dispute_card_data"] if row_order and row_order["dispute_card_data"] else ""
-        dispute_code = row_order["dispute_code"] if row_order and row_order["dispute_code"] else ""
+        card_data = row_order["dispute_card_data"] or ""
+        dispute_code = row_order["dispute_code"] or ""
+        transfer_type = row_order["transfer_type"]
+        transfer_phone = row_order["transfer_phone"] or ""
+        transfer_bank = row_order["transfer_bank"] or ""
+        transfer_name = row_order["transfer_recipient_name"] or ""
+
+        dispute_text = build_dispute_msg(
+            order_id, amount, reason, card_data=card_data, code=dispute_code,
+            transfer_type=transfer_type, transfer_phone=transfer_phone,
+            transfer_bank=transfer_bank, transfer_name=transfer_name
+        )
 
         try:
             await bot.send_photo(
@@ -184,15 +215,17 @@ def register_dispute(dp, bot):
         if worker_id:
             try:
                 worker_kb_buttons = []
-                if not card_data:
-                    worker_kb_buttons.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
-                worker_kb_buttons.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
+                if transfer_type == "sbp":
+                    worker_kb_buttons.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
+                else:
+                    if not card_data:
+                        worker_kb_buttons.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
+                    worker_kb_buttons.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
                 await bot.send_message(
-                    worker_id,
-                    build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
+                    worker_id, dispute_text,
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb_buttons)
                 )
@@ -201,8 +234,8 @@ def register_dispute(dp, bot):
 
         await state.clear()
         new_msg = await message.answer(
-            build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
-            reply_markup=dispute_client_kb(order_id),
+            dispute_text,
+            reply_markup=dispute_client_kb(order_id, transfer_type=transfer_type),
             parse_mode="HTML"
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
@@ -286,11 +319,24 @@ def register_dispute(dp, bot):
             await state.clear()
             return await message.answer("❌ Статус заявки уже изменён.")
 
-        row_order = await db.db_fetchone("SELECT amount, total_usdt, dispute_card_data, dispute_code FROM orders WHERE id=$1", order_id)
+        row_order = await db.db_fetchone(
+            "SELECT amount, total_usdt, dispute_card_data, dispute_code, transfer_type, transfer_phone, transfer_bank, transfer_recipient_name FROM orders WHERE id=$1",
+            order_id
+        )
         amount = float(row_order["amount"]) if row_order else 0
         total_usdt_val = float(row_order["total_usdt"]) if row_order else 0
-        card_data = row_order["dispute_card_data"] if row_order and row_order["dispute_card_data"] else ""
-        dispute_code = row_order["dispute_code"] if row_order and row_order["dispute_code"] else ""
+        card_data = row_order["dispute_card_data"] or ""
+        dispute_code = row_order["dispute_code"] or ""
+        transfer_type = row_order["transfer_type"]
+        transfer_phone = row_order["transfer_phone"] or ""
+        transfer_bank = row_order["transfer_bank"] or ""
+        transfer_name = row_order["transfer_recipient_name"] or ""
+
+        dispute_text = build_dispute_msg(
+            order_id, amount, reason, card_data=card_data, code=dispute_code,
+            transfer_type=transfer_type, transfer_phone=transfer_phone,
+            transfer_bank=transfer_bank, transfer_name=transfer_name
+        )
 
         try:
             await bot.send_photo(
@@ -312,36 +358,31 @@ def register_dispute(dp, bot):
         except Exception as e:
             logger.error(f"[worker_dispute_screenshot] admin notify error: {e}")
 
-        # Клиенту — если реквизиты уже были, показываем состояние 2, иначе состояние 1
         if client_id:
             try:
                 new_client_msg = await bot.send_message(
-                    client_id,
-                    build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
+                    client_id, dispute_text,
                     parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")],
-                        [InlineKeyboardButton(text="🔐 Запросить код", callback_data=f"request_code_{order_id}")],
-                        [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
-                        [InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")],
-                        [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
-                    ])
+                    reply_markup=dispute_client_kb(order_id, transfer_type=transfer_type)
                 )
                 await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_client_msg.message_id, order_id)
             except:
                 pass
 
         await state.clear()
-        # Воркеру — тоже показываем реквизиты если уже были отправлены
+
         worker_kb_buttons2 = []
-        if not card_data:
-            worker_kb_buttons2.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
-        worker_kb_buttons2.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
+        if transfer_type == "sbp":
+            worker_kb_buttons2.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
+        else:
+            if not card_data:
+                worker_kb_buttons2.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
+            worker_kb_buttons2.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
         worker_kb_buttons2.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
         worker_kb_buttons2.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
         worker_kb_buttons2.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
         new_msg = await message.answer(
-            build_dispute_msg(order_id, amount, reason, card_data=card_data, code=dispute_code),
+            dispute_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb_buttons2),
             parse_mode="HTML"
         )
