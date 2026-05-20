@@ -17,17 +17,23 @@ class DisputeStates(StatesGroup):
     waiting_for_worker_screenshot = State()
 
 
+def get_type_label(transfer_type):
+    if transfer_type == "sbp":
+        return "📲 Перевод по СБП"
+    elif transfer_type == "card":
+        return "💳 Перевод по номеру карты"
+    return "💳 Карта под оплату"
+
+
 def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requested=False,
                       transfer_type=None, transfer_phone="", transfer_bank="", transfer_name=""):
     extra = ""
 
-    # СБП реквизиты
     if transfer_type == "sbp":
         extra += f"📱 <b>Телефон:</b> <code>{transfer_phone}</code>\n"
         extra += f"🏦 <b>Банк:</b> {transfer_bank}\n"
         extra += f"👤 <b>Получатель:</b> {transfer_name}\n\n"
     else:
-        # Карта под оплату
         if card_data:
             extra += f"💳 <b>Реквизиты для оплаты:</b>\n{card_data}\n\n"
         if code_requested and not code:
@@ -186,6 +192,7 @@ def register_dispute(dp, bot):
         transfer_bank = row_order["transfer_bank"] or ""
         transfer_name = row_order["transfer_recipient_name"] or ""
 
+        type_label = get_type_label(transfer_type)
         dispute_text = build_dispute_msg(
             order_id, amount, reason, card_data=card_data, code=dispute_code,
             transfer_type=transfer_type, transfer_phone=transfer_phone,
@@ -200,6 +207,7 @@ def register_dispute(dp, bot):
                     f"⚡️ <b>Открыл:</b> Клиент\n"
                     f"👤 Клиент: {username} (<code>{uid}</code>)\n"
                     f"👷 Воркер: <code>{worker_id}</code>\n"
+                    f"💳 <b>Тип:</b> {type_label}\n"
                     f"💰 Сумма: {amount:.2f} RUB ({total_usdt:.4f} USDT)\n\n"
                     f"📝 <b>Причина:</b> {reason}"
                 ),
@@ -332,6 +340,7 @@ def register_dispute(dp, bot):
         transfer_bank = row_order["transfer_bank"] or ""
         transfer_name = row_order["transfer_recipient_name"] or ""
 
+        type_label = get_type_label(transfer_type)
         dispute_text = build_dispute_msg(
             order_id, amount, reason, card_data=card_data, code=dispute_code,
             transfer_type=transfer_type, transfer_phone=transfer_phone,
@@ -346,6 +355,7 @@ def register_dispute(dp, bot):
                     f"⚡️ <b>Открыл:</b> Воркер\n"
                     f"👷 Воркер: {username} (<code>{uid}</code>)\n"
                     f"👤 Клиент: <code>{client_id}</code>\n"
+                    f"💳 <b>Тип:</b> {type_label}\n"
                     f"💰 Сумма: {amount:.2f} RUB ({total_usdt_val:.4f} USDT)\n\n"
                     f"📝 <b>Причина:</b> {reason}"
                 ),
@@ -455,14 +465,16 @@ def register_dispute(dp, bot):
     async def dispute_info(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[3])
         row = await db.db_fetchone(
-            "SELECT id, user_id, worker_id, amount, total_usdt FROM orders WHERE id=$1 AND status='DISPUTE'", order_id
+            "SELECT id, user_id, worker_id, amount, total_usdt, transfer_type FROM orders WHERE id=$1 AND status='DISPUTE'", order_id
         )
         if not row:
             return await call.answer("❌ Спор не найден или уже решён", show_alert=True)
+        type_label = get_type_label(row["transfer_type"])
         text = (
             f"🆘 <b>Спор по заявке #{order_id}</b>\n\n"
             f"👤 Клиент: <code>{row['user_id']}</code>\n"
             f"👷 Воркер: <code>{row['worker_id']}</code>\n"
+            f"💳 Тип: {type_label}\n"
             f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
             f"💎 Заморожено: {float(row['total_usdt'] or 0):.4f} USDT"
         )
