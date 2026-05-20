@@ -351,7 +351,7 @@ def register_client(dp, bot):
 
         if call.data == "lk_active":
             orders = await db.db_fetchall(
-                "SELECT id, amount, total_usdt FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC", uid
+                "SELECT id, amount, total_usdt, transfer_type FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC", uid
             )
             if not orders:
                 await bot.send_message(chat_id, "🟢 Активных заявок нет", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -360,9 +360,15 @@ def register_client(dp, bot):
                 return await call.answer()
             buttons = []
             for order in orders:
-                total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
+                t = order["transfer_type"]
+                if t == "sbp":
+                    label = "📲 СБП"
+                elif t == "card":
+                    label = "💳 По карте"
+                else:
+                    label = "💳 Карта под оплату"
                 buttons.append([InlineKeyboardButton(
-                    text=f"🟢 #{order['id']} — {float(order['amount']):.0f} RUB • {total_usdt:.4f} USDT",
+                    text=f"🟢 {label} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"active_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
@@ -374,19 +380,12 @@ def register_client(dp, bot):
 
         if call.data.startswith("active_order_"):
             order_id = int(call.data.split("_")[2])
-            order = await db.db_fetchone("SELECT id, amount, total_usdt FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
-            if not order:
-                return await call.answer("❌ Заявка не найдена", show_alert=True)
-            total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
-                [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="lk_active")]
-            ])
+            # Просто открываем заявку через chat_view_order
             await bot.send_message(
-                chat_id,
-                f"🟢 <b>Заявка #{order_id}</b>\n\n💰 Сумма: {float(order['amount']):.2f} RUB\n💎 К получению: {total_usdt:.4f} USDT",
-                parse_mode="HTML", reply_markup=keyboard
+                chat_id, "📄 Открываю заявку...",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
+                ])
             )
             return await call.answer()
 
