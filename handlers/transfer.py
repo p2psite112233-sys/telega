@@ -198,13 +198,14 @@ def register_transfer(dp, bot):
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
                 f"<b>📋 Подтверждение заявки</b>\n\n"
-                f"💸 <b>Тип:</b> Перевод по СБП\n"
-                f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
-                f"📱 <b>Номер телефона:</b> <code>{phone}</code>\n"
-                f"🏦 <b>Банк:</b> {bank}\n"
-                f"👤 <b>Получатель:</b> {name}\n\n"
-                f"💼 <b>Комиссия сервиса:</b> {commission:.2f} RUB\n"
-                f"💎 <b>Итого к оплате:</b> {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
+                f"⚡️ Перевод по СБП\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"📋 Куда переводим:\n"
+                f"▸ 📱 <code>{phone}</code>\n"
+                f"▸ 🏦 {bank}\n"
+                f"▸ 👤 {name}\n\n"
+                f"💼 Комиссия: {commission:.2f} RUB\n"
+                f"💎 Итого: {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
                 f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>"
             ),
             parse_mode="HTML",
@@ -255,16 +256,13 @@ def register_transfer(dp, bot):
             pass
 
         client_msg = await call.message.answer(
-            f"🎉 Заявка принята в обработку\n\n"
-            f"🆔 ID: #{order_id}\n"
-            f"💸 Тип: Перевод по СБП\n"
-            f"💰 Сумма: {amount:.2f} RUB\n"
-            f"📱 Телефон: <code>{phone}</code>\n"
-            f"🏦 Банк: {bank}\n"
-            f"👤 Получатель: {name}\n\n"
-            f"💎 К оплате: {total:.2f} RUB\n\n"
-            f"📊 Статус: 🟡 Новая\n"
-            f"👨‍💻 Исполнитель: назначается\n\n"
+            f"⚡️ <b>#{order_id} · Перевод по СБП</b>\n\n"
+            f"💰 {amount:.2f} RUB\n\n"
+            f"📋 Куда переводим:\n"
+            f"▸ 📱 <code>{phone}</code>\n"
+            f"▸ 🏦 {bank}\n"
+            f"▸ 👤 {name}\n\n"
+            f"🟡 Новая · 👨‍💻 Исполнитель назначается\n\n"
             f"⏳ Ожидайте — скоро свяжемся с вами",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -275,8 +273,8 @@ def register_transfer(dp, bot):
 
         text_order = (
             f"📥 <b>Новая заявка #{order_id}</b>\n\n"
-            f"💸 <b>Тип:</b> Перевод по СБП\n\n"
-            f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
+            f"⚡️ Перевод по СБП\n\n"
+            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
             f"📱 <b>Телефон:</b> <code>{phone}</code>\n"
             f"🏦 <b>Банк:</b> {bank}\n"
             f"👤 <b>Получатель:</b> {name}\n\n"
@@ -435,13 +433,14 @@ def register_transfer(dp, bot):
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
                 f"<b>📋 Подтверждение заявки</b>\n\n"
-                f"💸 <b>Тип:</b> Перевод по номеру карты\n"
-                f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
-                f"💳 <b>Номер карты:</b> <code>{card_number}</code>\n"
-                f"🏦 <b>Банк:</b> {bank}\n"
-                f"👤 <b>Получатель:</b> {name}\n\n"
-                f"💼 <b>Комиссия сервиса:</b> {commission:.2f} RUB\n"
-                f"💎 <b>Итого к оплате:</b> {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
+                f"⚡️ Перевод по номеру карты\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"📋 Куда переводим:\n"
+                f"▸ 💳 <code>{card_number}</code>\n"
+                f"▸ 🏦 {bank}\n"
+                f"▸ 👤 {name}\n\n"
+                f"💼 Комиссия: {commission:.2f} RUB\n"
+                f"💎 Итого: {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
                 f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>"
             ),
             parse_mode="HTML",
@@ -481,7 +480,6 @@ def register_transfer(dp, bot):
                 ])
             )
 
-        # Сохраняем номер карты в transfer_phone (используем это поле для хранения)
         await db.db_execute(
             "UPDATE orders SET transfer_type=$1, transfer_phone=$2, transfer_bank=$3, transfer_recipient_name=$4 WHERE id=$5",
             "card", card_number, bank, name, order_id
@@ -493,16 +491,13 @@ def register_transfer(dp, bot):
             pass
 
         client_msg = await call.message.answer(
-            f"🎉 Заявка принята в обработку\n\n"
-            f"🆔 ID: #{order_id}\n"
-            f"💸 Тип: Перевод по номеру карты\n"
-            f"💰 Сумма: {amount:.2f} RUB\n"
-            f"💳 Номер карты: <code>{card_number}</code>\n"
-            f"🏦 Банк: {bank}\n"
-            f"👤 Получатель: {name}\n\n"
-            f"💎 К оплате: {total:.2f} RUB\n\n"
-            f"📊 Статус: 🟡 Новая\n"
-            f"👨‍💻 Исполнитель: назначается\n\n"
+            f"⚡️ <b>#{order_id} · Перевод по номеру карты</b>\n\n"
+            f"💰 {amount:.2f} RUB\n\n"
+            f"📋 Куда переводим:\n"
+            f"▸ 💳 <code>{card_number}</code>\n"
+            f"▸ 🏦 {bank}\n"
+            f"▸ 👤 {name}\n\n"
+            f"🟡 Новая · 👨‍💻 Исполнитель назначается\n\n"
             f"⏳ Ожидайте — скоро свяжемся с вами",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -513,8 +508,8 @@ def register_transfer(dp, bot):
 
         text_order = (
             f"📥 <b>Новая заявка #{order_id}</b>\n\n"
-            f"💸 <b>Тип:</b> Перевод по номеру карты\n\n"
-            f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
+            f"⚡️ Перевод по номеру карты\n\n"
+            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
             f"💳 <b>Номер карты:</b> <code>{card_number}</code>\n"
             f"🏦 <b>Банк:</b> {bank}\n"
             f"👤 <b>Получатель:</b> {name}\n\n"
