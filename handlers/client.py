@@ -79,7 +79,8 @@ def register_client(dp, bot):
         order_id = int(parts[2])
         uid = call.from_user.id
         row = await db.db_fetchone(
-            "SELECT worker_id, amount, status, client_message_id, total_usdt, amount_usdt FROM orders WHERE id=$1 AND user_id=$2",
+            "SELECT worker_id, amount, status, client_message_id, total_usdt, amount_usdt, "
+            "transfer_type, transfer_phone, transfer_bank, transfer_recipient_name FROM orders WHERE id=$1 AND user_id=$2",
             order_id, uid
         )
         if not row:
@@ -90,6 +91,11 @@ def register_client(dp, bot):
         client_msg_id = row["client_message_id"]
         total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0.0
         amount_usdt = float(row["amount_usdt"]) if row["amount_usdt"] else 0.0
+        transfer_type = row["transfer_type"]
+        transfer_phone = row["transfer_phone"] or ""
+        transfer_bank = row["transfer_bank"] or ""
+        transfer_name = row["transfer_recipient_name"] or ""
+
         if status == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
         result = await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1 AND status IN ('IN_PROGRESS', 'DISPUTE')", order_id)
@@ -102,7 +108,22 @@ def register_client(dp, bot):
         await db.unfreeze_to_worker(uid, worker_id, total_usdt, amount_usdt)
         client_balance_new = await db.get_balance(uid)
         worker_balance = await db.get_balance(worker_id)
-        worker_amount = round(amount_usdt + (total_usdt - amount_usdt) * 0.8, 4)
+
+        commission = max(round(amount * 0.20, 2), 30)
+        total_rub = round(amount + commission, 2)
+        worker_net_usdt = round((total_usdt - amount_usdt) * 0.8, 4)
+        worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+
+        # Определяем тип заявки
+        if transfer_type == "sbp":
+            type_label = "Перевод по СБП"
+            req_line = f"▸ 📱 <code>{transfer_phone}</code>"
+        elif transfer_type == "card":
+            type_label = "Перевод по номеру карты"
+            req_line = f"▸ 💳 <code>{transfer_phone}</code>"
+        else:
+            type_label = "Карта под оплату"
+            req_line = None
 
         w_row = await db.db_fetchone("SELECT worker_message_id FROM orders WHERE id=$1", order_id)
         if w_row and w_row["worker_message_id"]:
@@ -110,23 +131,64 @@ def register_client(dp, bot):
                 await bot.delete_message(chat_id=worker_id, message_id=w_row["worker_message_id"])
             except:
                 pass
+
+        # Сообщение клиенту
+        if transfer_type in ("sbp", "card"):
+            client_text = (
+                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"📋 Куда переводили:\n"
+                f"{req_line}\n"
+                f"▸ 🏦 {transfer_bank}\n"
+                f"▸ 👤 {transfer_name}\n\n"
+                f"✅ Заявка завершена!\n"
+                f"💸 Списано: {total_usdt:.4f} USDT\n"
+                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+            )
+        else:
+            client_text = (
+                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"✅ Заявка завершена!\n"
+                f"💸 Списано: {total_usdt:.4f} USDT\n"
+                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+            )
+
         try:
             await bot.edit_message_text(
                 chat_id=uid, message_id=client_msg_id,
-                text=f"✅ Заявка #{order_id} завершена!\n\n🆔 ID: #{order_id}\n💳 Услуга: Карта под оплату\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n💸 Списано: {total_usdt:.4f} USDT\n\n"
-                     f"📊 Статус: ✅ Завершена\n💰 Ваш баланс: {client_balance_new:.2f} USDT"
+                text=client_text,
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"[client_paid] edit error: {e}")
+
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
-        try:
-            await bot.send_message(
-                worker_id,
-                f"✅ Заявка #{order_id} завершена!\n\n🆔 <b>ID заявки:</b> #{order_id}\n💳 <b>Услуга:</b> Карта под оплату\n\n"
-                f"💎 <b>Зачислено:</b> {worker_amount:.4f} USDT\n💰 <b>Ваш баланс:</b> {worker_balance:.2f} USDT",
-                parse_mode="HTML"
+
+        # Сообщение воркеру
+        if transfer_type in ("sbp", "card"):
+            worker_text = (
+                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"📋 Куда переводили:\n"
+                f"{req_line}\n"
+                f"▸ 🏦 {transfer_bank}\n"
+                f"▸ 👤 {transfer_name}\n\n"
+                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+                f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
+                f"✅ Заявка завершена!"
             )
+        else:
+            worker_text = (
+                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+                f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
+                f"✅ Заявка завершена!"
+            )
+
+        try:
+            await bot.send_message(worker_id, worker_text, parse_mode="HTML")
         except Exception as e:
             logger.error(f"[client_paid] send_message error: {e}")
 
