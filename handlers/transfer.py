@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 import db
-from config import TRANSFER_BANNER_FILE_ID
+from config import TRANSFER_BANNER_FILE_ID, TRANSFER_SELECT_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import broadcast_order
 
@@ -34,7 +34,7 @@ def register_transfer(dp, bot):
         except:
             pass
         await call.message.answer_photo(
-            photo=TRANSFER_BANNER_FILE_ID,
+            photo=TRANSFER_SELECT_BANNER_FILE_ID,
             caption=(
                 "<b>🏦 Перевод на карту</b>\n\n"
                 "<blockquote>Выберите тип перевода. Исполнитель переведёт нужную сумму "
