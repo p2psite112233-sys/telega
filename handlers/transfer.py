@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
 import db
+from config import TRANSFER_BANNER_FILE_ID
 from utils.crypto import crypto_get_rate
 from handlers.common import broadcast_order
 
@@ -26,11 +27,14 @@ def register_transfer(dp, bot):
             await call.message.delete()
         except:
             pass
-        await call.message.answer(
-            "<b>🏦 Перевод на карту</b>\n\n"
-            "<blockquote>Выберите тип перевода. Исполнитель переведёт нужную сумму "
-            "на указанные реквизиты.</blockquote>\n\n"
-            "Выберите тип перевода:",
+        await call.message.answer_photo(
+            photo=TRANSFER_BANNER_FILE_ID,
+            caption=(
+                "<b>🏦 Перевод на карту</b>\n\n"
+                "<blockquote>Выберите тип перевода. Исполнитель переведёт нужную сумму "
+                "на указанные реквизиты.</blockquote>\n\n"
+                "Выберите тип перевода:"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
@@ -50,10 +54,13 @@ def register_transfer(dp, bot):
             pass
         await state.set_state(TransferStates.waiting_for_amount)
         await state.update_data(transfer_type="sbp")
-        msg = await call.message.answer(
-            "<b>📲 Перевод по СБП</b>\n\n"
-            "<blockquote>Введите сумму перевода в рублях.</blockquote>\n\n"
-            "Пример: <b>1000</b>",
+        msg = await call.message.answer_photo(
+            photo=TRANSFER_BANNER_FILE_ID,
+            caption=(
+                "<b>📲 Перевод по СБП</b>\n\n"
+                "<blockquote>Введите сумму перевода в рублях.</blockquote>\n\n"
+                "Пример: <b>1000</b>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
@@ -83,10 +90,13 @@ def register_transfer(dp, bot):
 
         await state.update_data(amount=amount)
         await state.set_state(TransferStates.waiting_for_phone)
-        msg = await message.answer(
-            "<b>📱 Номер телефона</b>\n\n"
-            "<blockquote>Введите номер телефона получателя.</blockquote>\n\n"
-            "Пример: <b>+79001234567</b>",
+        msg = await message.answer_photo(
+            photo=TRANSFER_BANNER_FILE_ID,
+            caption=(
+                "<b>📱 Номер телефона</b>\n\n"
+                "<blockquote>Введите номер телефона получателя.</blockquote>\n\n"
+                "Пример: <b>+79001234567</b>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
@@ -110,10 +120,13 @@ def register_transfer(dp, bot):
 
         await state.update_data(phone=phone)
         await state.set_state(TransferStates.waiting_for_bank)
-        msg = await message.answer(
-            "<b>🏦 Банк получателя</b>\n\n"
-            "<blockquote>Введите название банка получателя.</blockquote>\n\n"
-            "Пример: <b>Сбербанк</b>",
+        msg = await message.answer_photo(
+            photo=TRANSFER_BANNER_FILE_ID,
+            caption=(
+                "<b>🏦 Банк получателя</b>\n\n"
+                "<blockquote>Введите название банка получателя.</blockquote>\n\n"
+                "Пример: <b>Сбербанк</b>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
@@ -137,10 +150,13 @@ def register_transfer(dp, bot):
 
         await state.update_data(bank=bank)
         await state.set_state(TransferStates.waiting_for_name)
-        msg = await message.answer(
-            "<b>👤 Имя получателя</b>\n\n"
-            "<blockquote>Введите имя и отчество получателя.</blockquote>\n\n"
-            "Пример: <b>Иван Иванович</b>",
+        msg = await message.answer_photo(
+            photo=TRANSFER_BANNER_FILE_ID,
+            caption=(
+                "<b>👤 Имя получателя</b>\n\n"
+                "<blockquote>Введите имя и отчество получателя.</blockquote>\n\n"
+                "Пример: <b>Иван Иванович</b>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 Отмена", callback_data="client_back_menu")]
@@ -173,16 +189,19 @@ def register_transfer(dp, bot):
 
         await state.update_data(name=name, commission=commission, total=total, total_usdt=total_usdt)
 
-        await message.answer(
-            f"<b>📋 Подтверждение заявки</b>\n\n"
-            f"💸 <b>Тип:</b> Перевод по СБП\n"
-            f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
-            f"📱 <b>Номер телефона:</b> <code>{phone}</code>\n"
-            f"🏦 <b>Банк:</b> {bank}\n"
-            f"👤 <b>Получатель:</b> {name}\n\n"
-            f"💼 <b>Комиссия сервиса:</b> {commission:.2f} RUB\n"
-            f"💎 <b>Итого к оплате:</b> {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
-            f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>",
+        await message.answer_photo(
+            photo=TRANSFER_BANNER_FILE_ID,
+            caption=(
+                f"<b>📋 Подтверждение заявки</b>\n\n"
+                f"💸 <b>Тип:</b> Перевод по СБП\n"
+                f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
+                f"📱 <b>Номер телефона:</b> <code>{phone}</code>\n"
+                f"🏦 <b>Банк:</b> {bank}\n"
+                f"👤 <b>Получатель:</b> {name}\n\n"
+                f"💼 <b>Комиссия сервиса:</b> {commission:.2f} RUB\n"
+                f"💎 <b>Итого к оплате:</b> {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
+                f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>"
+            ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Подтвердить", callback_data="transfer_sbp_confirm")],
@@ -205,7 +224,6 @@ def register_transfer(dp, bot):
 
         amount_usdt = round(total_usdt * amount / total, 4) if total else 0.0
 
-        # Создаём заявку в БД
         order_id = await db.create_order_safe(uid, amount, total_usdt, amount_usdt, False)
         if order_id == 0:
             balance = await db.get_balance(uid)
@@ -224,7 +242,6 @@ def register_transfer(dp, bot):
                 ])
             )
 
-        # Сохраняем реквизиты СБП
         await db.db_execute(
             "UPDATE orders SET transfer_type=$1, transfer_phone=$2, transfer_bank=$3, transfer_recipient_name=$4 WHERE id=$5",
             "sbp", phone, bank, name, order_id
@@ -236,7 +253,6 @@ def register_transfer(dp, bot):
         except:
             pass
 
-        # Сообщение клиенту
         client_msg = await call.message.answer(
             f"🎉 Заявка принята в обработку\n\n"
             f"🆔 ID: #{order_id}\n"
@@ -256,7 +272,6 @@ def register_transfer(dp, bot):
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", client_msg.message_id, order_id)
 
-        # Рассылка воркерам
         text_order = (
             f"📥 <b>Новая заявка #{order_id}</b>\n\n"
             f"💸 <b>Тип:</b> Перевод по СБП\n\n"
