@@ -45,6 +45,8 @@ def get_type_label(transfer_type):
         return "Перевод по СБП"
     elif transfer_type == "card":
         return "Перевод по номеру карты"
+    elif transfer_type == "phone":
+        return "Пополнение номера"
     return "Карта под оплату"
 
 
@@ -115,10 +117,8 @@ def register_client(dp, bot):
             pass
         await db.unfreeze_to_worker(uid, worker_id, total_usdt, amount_usdt)
         client_balance_new = await db.get_balance(uid)
-        worker_balance = await db.get_balance(worker_id)
 
         commission = max(round(amount * 0.20, 2), 30)
-        total_rub = round(amount + commission, 2)
         worker_net_usdt = round((total_usdt - amount_usdt) * 0.8, 4)
         worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
 
@@ -128,6 +128,9 @@ def register_client(dp, bot):
         elif transfer_type == "card":
             type_label = "Перевод по номеру карты"
             req_line = f"▸ 💳 <code>{transfer_phone}</code>"
+        elif transfer_type == "phone":
+            type_label = "Пополнение номера"
+            req_line = f"▸ 📱 <code>{transfer_phone}</code>"
         else:
             type_label = "Карта под оплату"
             req_line = None
@@ -151,26 +154,6 @@ def register_client(dp, bot):
                 f"💸 Списано: {total_usdt:.4f} USDT\n"
                 f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
             )
-        else:
-            client_text = (
-                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"✅ Заявка завершена!\n"
-                f"💸 Списано: {total_usdt:.4f} USDT\n"
-                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
-            )
-
-        try:
-            await bot.edit_message_text(
-                chat_id=uid, message_id=client_msg_id,
-                text=client_text, parse_mode="HTML"
-            )
-        except Exception as e:
-            logger.error(f"[client_paid] edit error: {e}")
-
-        await call.answer("✅ Оплата подтверждена!", show_alert=True)
-
-        if transfer_type in ("sbp", "card"):
             worker_text = (
                 f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
                 f"💰 {amount:.2f} RUB\n\n"
@@ -182,7 +165,31 @@ def register_client(dp, bot):
                 f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
                 f"✅ Заявка завершена!"
             )
+        elif transfer_type == "phone":
+            client_text = (
+                f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
+                f"💰 {amount:.2f} RUB\n"
+                f"📱 Номер: <code>{transfer_phone}</code>\n\n"
+                f"✅ Заявка завершена!\n"
+                f"💸 Списано: {total_usdt:.4f} USDT\n"
+                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+            )
+            worker_text = (
+                f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
+                f"💰 {amount:.2f} RUB\n"
+                f"📱 Номер: <code>{transfer_phone}</code>\n\n"
+                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+                f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
+                f"✅ Заявка завершена!"
+            )
         else:
+            client_text = (
+                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
+                f"✅ Заявка завершена!\n"
+                f"💸 Списано: {total_usdt:.4f} USDT\n"
+                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+            )
             worker_text = (
                 f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
                 f"💰 {amount:.2f} RUB\n\n"
@@ -190,6 +197,16 @@ def register_client(dp, bot):
                 f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
                 f"✅ Заявка завершена!"
             )
+
+        try:
+            await bot.edit_message_text(
+                chat_id=uid, message_id=client_msg_id,
+                text=client_text, parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"[client_paid] edit error: {e}")
+
+        await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
         try:
             await bot.send_message(worker_id, worker_text, parse_mode="HTML")
@@ -210,6 +227,7 @@ def register_client(dp, bot):
         & ~F.data.startswith("client_card")
         & ~F.data.startswith("client_topup")
         & ~F.data.startswith("client_transfer")
+        & ~F.data.startswith("client_phone")
         & ~F.data.startswith("send_req_")
         & ~F.data.startswith("worker_confirm_")
         & ~F.data.startswith("worker_apply")
@@ -365,6 +383,8 @@ def register_client(dp, bot):
                     label = "📲 СБП"
                 elif t == "card":
                     label = "💳 По карте"
+                elif t == "phone":
+                    label = "📱 Пополнение номера"
                 else:
                     label = "💳 Карта под оплату"
                 buttons.append([InlineKeyboardButton(
@@ -380,7 +400,6 @@ def register_client(dp, bot):
 
         if call.data.startswith("active_order_"):
             order_id = int(call.data.split("_")[2])
-            # Просто открываем заявку через chat_view_order
             await bot.send_message(
                 chat_id, "📄 Открываю заявку...",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
