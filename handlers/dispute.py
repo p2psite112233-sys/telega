@@ -19,38 +19,46 @@ class DisputeStates(StatesGroup):
 
 def get_type_label(transfer_type):
     if transfer_type == "sbp":
-        return "📲 Перевод по СБП"
+        return "Перевод по СБП"
     elif transfer_type == "card":
-        return "💳 Перевод по номеру карты"
-    return "💳 Карта под оплату"
+        return "Перевод по номеру карты"
+    return "Карта под оплату"
 
 
 def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requested=False,
                       transfer_type=None, transfer_phone="", transfer_bank="", transfer_name=""):
-    extra = ""
 
     if transfer_type == "sbp":
-        extra += f"📱 <b>Телефон:</b> <code>{transfer_phone}</code>\n"
-        extra += f"🏦 <b>Банк:</b> {transfer_bank}\n"
-        extra += f"👤 <b>Получатель:</b> {transfer_name}\n\n"
+        type_label = "Перевод по СБП"
+        req_block = (
+            f"📋 Куда переводим:\n"
+            f"▸ 📱 <code>{transfer_phone}</code>\n"
+            f"▸ 🏦 {transfer_bank}\n"
+            f"▸ 👤 {transfer_name}\n\n"
+        )
     elif transfer_type == "card":
-        extra += f"💳 <b>Номер карты:</b> <code>{transfer_phone}</code>\n"
-        extra += f"🏦 <b>Банк:</b> {transfer_bank}\n"
-        extra += f"👤 <b>Получатель:</b> {transfer_name}\n\n"
+        type_label = "Перевод по номеру карты"
+        req_block = (
+            f"📋 Куда переводим:\n"
+            f"▸ 💳 <code>{transfer_phone}</code>\n"
+            f"▸ 🏦 {transfer_bank}\n"
+            f"▸ 👤 {transfer_name}\n\n"
+        )
     else:
+        type_label = "Карта под оплату"
+        req_block = ""
         if card_data:
-            extra += f"💳 <b>Реквизиты для оплаты:</b>\n{card_data}\n\n"
+            req_block += f"📋 Реквизиты для оплаты:\n{card_data}\n\n"
         if code_requested and not code:
-            extra += f"🔐 <b>Вы запросили код подтверждения, ожидайте.</b>\n⏳ ...\n\n"
+            req_block += f"🔐 Вы запросили код подтверждения, ожидайте.\n⏳ ...\n\n"
         if code:
-            extra += f"🔐 <b>Код подтверждения:</b> <code>{code}</code>\n\n"
+            req_block += f"🔐 Код подтверждения: <code>{code}</code>\n\n"
 
     return (
-        f"🆔 <b>Заявка:</b> #{order_id}\n"
-        f"💸 <b>Тип:</b> {get_type_label(transfer_type)}\n"
-        f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
-        f"{extra}"
-        f"📝 <b>Причина:</b> {reason}\n\n"
+        f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+        f"💰 {amount:.2f} RUB\n\n"
+        f"{req_block}"
+        f"📝 Причина: {reason}\n\n"
         f"⚠️ По сделке открыт спор"
     )
 
