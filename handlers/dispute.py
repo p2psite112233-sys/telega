@@ -22,6 +22,8 @@ def get_type_label(transfer_type):
         return "Перевод по СБП"
     elif transfer_type == "card":
         return "Перевод по номеру карты"
+    elif transfer_type == "phone":
+        return "Пополнение номера"
     return "Карта под оплату"
 
 
@@ -44,6 +46,11 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
             f"▸ 🏦 {transfer_bank}\n"
             f"▸ 👤 {transfer_name}\n\n"
         )
+    elif transfer_type == "phone":
+        type_label = "Пополнение номера"
+        req_block = (
+            f"📱 Номер: <code>{transfer_phone}</code>\n\n"
+        )
     else:
         type_label = "Карта под оплату"
         req_block = ""
@@ -65,8 +72,8 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
 
 def dispute_client_kb(order_id, transfer_type=None):
     buttons = []
-    if transfer_type in ("sbp", "card"):
-        buttons.append([InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")])
+    if transfer_type in ("sbp", "card", "phone"):
+        buttons.append([InlineKeyboardButton(text="✅ Выполнено", callback_data=f"client_paid_{order_id}")])
     else:
         buttons.append([InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")])
         buttons.append([InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")])
@@ -233,8 +240,8 @@ def register_dispute(dp, bot):
         if worker_id:
             try:
                 worker_kb_buttons = []
-                if transfer_type in ("sbp", "card"):
-                    worker_kb_buttons.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
+                if transfer_type in ("sbp", "card", "phone"):
+                    worker_kb_buttons.append([InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")])
                 else:
                     if not card_data:
                         worker_kb_buttons.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
@@ -385,8 +392,8 @@ def register_dispute(dp, bot):
         await state.clear()
 
         worker_kb_buttons2 = []
-        if transfer_type in ("sbp", "card"):
-            worker_kb_buttons2.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
+        if transfer_type in ("sbp", "card", "phone"):
+            worker_kb_buttons2.append([InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")])
         else:
             if not card_data:
                 worker_kb_buttons2.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
