@@ -28,6 +28,31 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
     )
 
 
+def order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank, name):
+    commission = max(round(amount * 0.20, 2), 30)
+    total_rub = round(amount + commission, 2)
+    amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
+    commission_usdt = round(total_usdt - amount_usdt, 4)
+    worker_net_usdt = round(commission_usdt * 0.8, 4)
+    worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+    if transfer_type == "sbp":
+        type_label = "📲 Перевод по СБП"
+        req = f"📱 <b>Телефон:</b> <code>{phone_or_card}</code>"
+    else:
+        type_label = "💳 Перевод по номеру карты"
+        req = f"💳 <b>Номер карты:</b> <code>{phone_or_card}</code>"
+    return (
+        f"🆔 <b>ID заявки:</b> #{order_id}\n"
+        f"💸 <b>Услуга:</b> {type_label}\n\n"
+        f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
+        f"{req}\n"
+        f"🏦 <b>Банк:</b> {bank}\n"
+        f"👤 <b>Получатель:</b> {name}\n\n"
+        f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+        f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
+    )
+
+
 class ChatStates(StatesGroup):
     waiting_for_message = State()
 
@@ -54,28 +79,21 @@ def register_chat(dp, bot):
     async def chat_write(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
-
-        row = await db.db_fetchone(
-            "SELECT user_id, worker_id FROM orders WHERE id=$1", order_id
-        )
+        row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
-
         if uid == row["user_id"]:
             role = "client"
         elif uid == row["worker_id"]:
             role = "worker"
         else:
             return await call.answer("❌ Нет доступа", show_alert=True)
-
         await state.set_state(ChatStates.waiting_for_message)
         await state.update_data(chat_order_id=order_id, chat_role=role)
-
         try:
             await call.message.delete()
         except:
             pass
-
         view_cb = f"chat_view_order_{order_id}" if role == "worker" else f"chat_view_client_order_{order_id}"
         msg = await call.message.answer(
             f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
@@ -91,28 +109,21 @@ def register_chat(dp, bot):
     async def chat_reply(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
-
-        row = await db.db_fetchone(
-            "SELECT user_id, worker_id FROM orders WHERE id=$1", order_id
-        )
+        row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
         if not row:
             return await call.answer("❌ Заявка не найдена", show_alert=True)
-
         if uid == row["user_id"]:
             role = "client"
         elif uid == row["worker_id"]:
             role = "worker"
         else:
             return await call.answer("❌ Нет доступа", show_alert=True)
-
         await state.set_state(ChatStates.waiting_for_message)
         await state.update_data(chat_order_id=order_id, chat_role=role)
-
         try:
             await call.message.delete()
         except:
             pass
-
         view_cb = f"chat_view_order_{order_id}" if role == "worker" else f"chat_view_client_order_{order_id}"
         msg = await call.message.answer(
             f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
@@ -178,22 +189,32 @@ def register_chat(dp, bot):
             code_req = row.get("code_requested") or False
             await bot.send_message(
                 uid,
-                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=code_req),
+                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=code_req,
+                                  transfer_type=transfer_type,
+                                  transfer_phone=row["transfer_phone"] or "",
+                                  transfer_bank=row["transfer_bank"] or "",
+                                  transfer_name=row["transfer_recipient_name"] or ""),
                 parse_mode="HTML",
-                reply_markup=dispute_client_kb(order_id)
+                reply_markup=dispute_client_kb(order_id, transfer_type=transfer_type)
             )
             return await call.answer()
 
-        # СБП заявка
-        if transfer_type == "sbp":
-            phone = row["transfer_phone"] or ""
+        # СБП или перевод по карте
+        if transfer_type in ("sbp", "card"):
+            phone_or_card = row["transfer_phone"] or ""
             bank = row["transfer_bank"] or ""
             name = row["transfer_recipient_name"] or ""
+            if transfer_type == "sbp":
+                type_label = "Перевод по СБП"
+                req_line = f"📱 Телефон: <code>{phone_or_card}</code>"
+            else:
+                type_label = "Перевод по номеру карты"
+                req_line = f"💳 Номер карты: <code>{phone_or_card}</code>"
             text = (
                 f"🎉 Заявка #{order_id}\n\n"
-                f"💸 Тип: Перевод по СБП\n"
+                f"💸 Тип: {type_label}\n"
                 f"💰 Сумма: {amount:.2f} RUB\n"
-                f"📱 Телефон: <code>{phone}</code>\n"
+                f"{req_line}\n"
                 f"🏦 Банк: {bank}\n"
                 f"👤 Получатель: {name}\n\n"
                 f"📊 Статус: 🟢 В работе\n\n"
@@ -208,10 +229,9 @@ def register_chat(dp, bot):
             await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
             return await call.answer()
 
-        # Обычная заявка — карта под оплату
+        # Карта под оплату
         card_block = f"\n💳 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
         code_block = f"🔐 Код подтверждения: <code>{code}</code>\n\n" if code else ""
-
         if code:
             footer = "⏳ Нажмите кнопку ниже, если оплата прошла успешно"
             kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -235,16 +255,13 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
-
         text = (
             f"🎉 Заявка #{order_id}\n\n"
             f"🆔 ID: #{order_id}\n"
             f"💳 Услуга: Карта под оплату\n"
             f"💰 Сумма: {amount:.2f} RUB\n\n"
             f"📊 Статус: 🟢 В работе\n"
-            f"{card_block}"
-            f"{code_block}"
-            f"{footer}"
+            f"{card_block}{code_block}{footer}"
         )
         await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
@@ -275,41 +292,34 @@ def register_chat(dp, bot):
         if status == "DISPUTE":
             from handlers.dispute import build_dispute_msg
             worker_kb = []
-            if not card_data:
-                worker_kb.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
-            worker_kb.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
+            if transfer_type in ("sbp", "card"):
+                worker_kb.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
+            else:
+                if not card_data:
+                    worker_kb.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
+                worker_kb.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
             worker_kb.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
             worker_kb.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
             worker_kb.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             await bot.send_message(
                 uid,
-                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code, code_requested=(code_req_flag and not code)),
+                build_dispute_msg(order_id, amount, reason, card_data=card_data, code=code,
+                                  code_requested=(code_req_flag and not code),
+                                  transfer_type=transfer_type,
+                                  transfer_phone=row["transfer_phone"] or "",
+                                  transfer_bank=row["transfer_bank"] or "",
+                                  transfer_name=row["transfer_recipient_name"] or ""),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb)
             )
             return await call.answer()
 
-        # СБП заявка для воркера
-        if transfer_type == "sbp":
-            phone = row["transfer_phone"] or ""
+        # СБП или перевод по карте для воркера
+        if transfer_type in ("sbp", "card"):
+            phone_or_card = row["transfer_phone"] or ""
             bank = row["transfer_bank"] or ""
             name = row["transfer_recipient_name"] or ""
-            commission = max(round(amount * 0.20, 2), 30)
-            total_rub = round(amount + commission, 2)
-            amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
-            commission_usdt = round(total_usdt - amount_usdt, 4)
-            worker_net_usdt = round(commission_usdt * 0.8, 4)
-            worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
-            text = (
-                f"🆔 <b>ID заявки:</b> #{order_id}\n"
-                f"💸 <b>Услуга:</b> Перевод по СБП\n\n"
-                f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
-                f"📱 <b>Телефон:</b> <code>{phone}</code>\n"
-                f"🏦 <b>Банк:</b> {bank}\n"
-                f"👤 <b>Получатель:</b> {name}\n\n"
-                f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
-            )
+            text = order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank, name)
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -319,7 +329,7 @@ def register_chat(dp, bot):
             await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
             return await call.answer()
 
-        # Обычная заявка — карта под оплату
+        # Карта под оплату
         if code:
             text = f"✅ Код отправлен клиенту\n\n{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n⏳ Ожидаем подтверждения от клиента"
             kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -350,7 +360,6 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
-
         await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
 
@@ -366,9 +375,7 @@ def register_chat(dp, bot):
         if not text and not photo_id:
             return await message.answer("❌ Отправьте текст или фото.")
 
-        row = await db.db_fetchone(
-            "SELECT user_id, worker_id FROM orders WHERE id=$1", order_id
-        )
+        row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
         if not row:
             await state.clear()
             return await message.answer("❌ Заявка не найдена.")
@@ -393,8 +400,7 @@ def register_chat(dp, bot):
         try:
             if photo_id:
                 await bot.send_photo(
-                    recipient_id,
-                    photo=photo_id,
+                    recipient_id, photo=photo_id,
                     caption=chat_msg_text(order_id, text or ""),
                     parse_mode="HTML",
                     reply_markup=chat_msg_kb(order_id, is_worker=is_recipient_worker)
