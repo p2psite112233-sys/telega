@@ -40,6 +40,14 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 
+def get_type_label(transfer_type):
+    if transfer_type == "sbp":
+        return "Перевод по СБП"
+    elif transfer_type == "card":
+        return "Перевод по номеру карты"
+    return "Карта под оплату"
+
+
 def register_client(dp, bot):
 
     @dp.callback_query(F.data.startswith("cancel_order_"))
@@ -114,7 +122,6 @@ def register_client(dp, bot):
         worker_net_usdt = round((total_usdt - amount_usdt) * 0.8, 4)
         worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
 
-        # Определяем тип заявки
         if transfer_type == "sbp":
             type_label = "Перевод по СБП"
             req_line = f"▸ 📱 <code>{transfer_phone}</code>"
@@ -132,7 +139,6 @@ def register_client(dp, bot):
             except:
                 pass
 
-        # Сообщение клиенту
         if transfer_type in ("sbp", "card"):
             client_text = (
                 f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
@@ -157,15 +163,13 @@ def register_client(dp, bot):
         try:
             await bot.edit_message_text(
                 chat_id=uid, message_id=client_msg_id,
-                text=client_text,
-                parse_mode="HTML"
+                text=client_text, parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"[client_paid] edit error: {e}")
 
         await call.answer("✅ Оплата подтверждена!", show_alert=True)
 
-        # Сообщение воркеру
         if transfer_type in ("sbp", "card"):
             worker_text = (
                 f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
@@ -449,7 +453,10 @@ def register_client(dp, bot):
 
         if call.data.startswith("worker_history_order_"):
             order_id = int(call.data.split("_")[3])
-            row = await db.db_fetchone("SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
+            row = await db.db_fetchone(
+                "SELECT id, amount, total_usdt, status, transfer_type FROM orders WHERE id=$1 AND worker_id=$2",
+                order_id, uid
+            )
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
             if row["status"] == "IN_PROGRESS":
@@ -458,14 +465,17 @@ def register_client(dp, bot):
                 ]))
                 return await call.answer()
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
+            type_label = get_type_label(row["transfer_type"])
             if row["status"] == "DONE": status_text = "✅ Завершена"
             elif row["status"] == "CANCELLED": status_text = "❌ Отменена"
             else: status_text = "🟡 Новая"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]])
             await bot.send_message(
                 chat_id,
-                f"<b>📋 Заявка #{row['id']}</b>\n\n💳 Услуга: Карта под оплату\n"
-                f"💰 Сумма: {float(row['amount']):.2f} RUB\n💎 Зачислено: {total_usdt:.2f} USDT\n📊 Статус: {status_text}",
+                f"⚡️ <b>#{row['id']} · {type_label}</b>\n\n"
+                f"💰 {float(row['amount']):.2f} RUB\n"
+                f"💎 Зачислено: {total_usdt:.4f} USDT\n"
+                f"📊 Статус: {status_text}",
                 parse_mode="HTML", reply_markup=keyboard
             )
             return await call.answer()
@@ -533,7 +543,10 @@ def register_client(dp, bot):
 
         if call.data.startswith("history_order_"):
             order_id = int(call.data.split("_")[2])
-            row = await db.db_fetchone("SELECT id, amount, total_usdt, status FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
+            row = await db.db_fetchone(
+                "SELECT id, amount, total_usdt, status, transfer_type FROM orders WHERE id=$1 AND user_id=$2",
+                order_id, uid
+            )
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
             if row["status"] in ("IN_PROGRESS", "DISPUTE"):
@@ -543,6 +556,7 @@ def register_client(dp, bot):
                 return await call.answer()
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
             status = row["status"]
+            type_label = get_type_label(row["transfer_type"])
             if status == "DONE": status_text = "✅ Завершена"
             elif status == "CANCELLED": status_text = "❌ Отменена"
             elif status == "NEW": status_text = "🟡 Новая"
@@ -552,8 +566,10 @@ def register_client(dp, bot):
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
             await bot.send_message(
                 chat_id,
-                f"<b>📋 Заявка #{row['id']}</b>\n\n💳 Услуга: Карта под оплату\n"
-                f"💰 Сумма: {float(row['amount']):.2f} RUB\n💸 Списано: {total_usdt:.2f} USDT\n📊 Статус: {status_text}",
+                f"⚡️ <b>#{row['id']} · {type_label}</b>\n\n"
+                f"💰 {float(row['amount']):.2f} RUB\n"
+                f"💸 Списано: {total_usdt:.4f} USDT\n"
+                f"📊 Статус: {status_text}",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
             return await call.answer()
