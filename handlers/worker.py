@@ -33,18 +33,27 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
         f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
     )
 
-def order_info_sbp(order_id: int, amount: float, total_usdt: float, phone: str, bank: str, name: str) -> str:
+def order_info_transfer(order_id: int, amount: float, total_usdt: float, transfer_type: str,
+                        phone_or_card: str, bank: str, name: str) -> str:
     commission = max(round(amount * 0.20, 2), 30)
     total_rub = round(amount + commission, 2)
     amount_usdt = round(total_usdt * amount / total_rub, 4) if total_rub else 0
     commission_usdt = round(total_usdt - amount_usdt, 4)
     worker_net_usdt = round(commission_usdt * 0.8, 4)
     worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
+
+    if transfer_type == "sbp":
+        type_label = "📲 Перевод по СБП"
+        requisite_label = f"📱 <b>Телефон:</b> <code>{phone_or_card}</code>"
+    else:
+        type_label = "💳 Перевод по номеру карты"
+        requisite_label = f"💳 <b>Номер карты:</b> <code>{phone_or_card}</code>"
+
     return (
         f"🆔 <b>ID заявки:</b> #{order_id}\n"
-        f"💸 <b>Услуга:</b> Перевод по СБП\n\n"
+        f"💸 <b>Услуга:</b> {type_label}\n\n"
         f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
-        f"📱 <b>Телефон:</b> <code>{phone}</code>\n"
+        f"{requisite_label}\n"
         f"🏦 <b>Банк:</b> {bank}\n"
         f"👤 <b>Получатель:</b> {name}\n\n"
         f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
@@ -127,6 +136,8 @@ def register_worker(dp, bot):
             t = order["transfer_type"]
             if t == "sbp":
                 label = "📲 СБП"
+            elif t == "card":
+                label = "💳 Перевод по карте"
             else:
                 label = "💳 Карта под оплату"
             buttons.append([InlineKeyboardButton(
@@ -190,7 +201,6 @@ def register_worker(dp, bot):
         if "UPDATE 0" in res:
             return await call.answer("❌ Заявку уже забрали!", show_alert=True)
 
-        # Убираем кнопки у остальных воркеров
         broadcasts = await db.db_fetchall(
             "SELECT worker_id, message_id FROM order_broadcasts WHERE order_id=$1", order_id
         )
@@ -217,16 +227,25 @@ def register_worker(dp, bot):
         is_unique = order["is_unique"] or False
         transfer_type = order["transfer_type"]
 
-        # СБП заявка
-        if transfer_type == "sbp":
-            phone = order["transfer_phone"] or ""
+        # СБП или перевод по карте
+        if transfer_type in ("sbp", "card"):
+            phone_or_card = order["transfer_phone"] or ""
             bank = order["transfer_bank"] or ""
             name = order["transfer_recipient_name"] or ""
+
+            if transfer_type == "sbp":
+                type_label = "Перевод по СБП"
+                req_label = f"📱 Телефон: <code>{phone_or_card}</code>"
+                done_cb = f"sbp_done_{order_id}"
+            else:
+                type_label = "Перевод по номеру карты"
+                req_label = f"💳 Номер карты: <code>{phone_or_card}</code>"
+                done_cb = f"sbp_done_{order_id}"  # используем тот же хендлер
 
             new_msg = await bot.send_message(
                 chat_id=order["user_id"],
                 text=f"🎉 Заявка #{order_id}\n\n"
-                     f"💸 Тип: Перевод по СБП\n"
+                     f"💸 Тип: {type_label}\n"
                      f"💰 Сумма: {amount:.2f} RUB\n\n"
                      f"📊 Статус: 🟢 В работе\n"
                      f"👨‍💻 Исполнитель принял заявку\n\n"
@@ -252,10 +271,10 @@ def register_worker(dp, bot):
 
             worker_msg = await call.message.answer(
                 f"✅ Вы взяли заявку #{order_id}\n\n"
-                f"{order_info_sbp(order_id, amount, total_usdt, phone, bank, name)}",
+                f"{order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank, name)}",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")],
+                    [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=done_cb)],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
@@ -264,7 +283,7 @@ def register_worker(dp, bot):
             await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
 
         else:
-            # Обычная заявка — карта под оплату
+            # Карта под оплату
             new_msg = await bot.send_message(
                 chat_id=order["user_id"],
                 text=f"🎉 Заявка #{order_id}\n\n"
@@ -310,7 +329,7 @@ def register_worker(dp, bot):
         uid = call.from_user.id
 
         row = await db.db_fetchone(
-            "SELECT user_id, amount, total_usdt, amount_usdt, client_message_id, worker_message_id, status FROM orders WHERE id=$1 AND worker_id=$2",
+            "SELECT user_id, amount, total_usdt, amount_usdt, client_message_id, worker_message_id, status, transfer_type FROM orders WHERE id=$1 AND worker_id=$2",
             order_id, uid
         )
         if not row:
@@ -318,14 +337,16 @@ def register_worker(dp, bot):
         if row["status"] == "DONE":
             return await call.answer("✅ Заявка уже завершена", show_alert=True)
 
-        # Уведомляем клиента что перевод выполнен
         amount = float(row["amount"])
+        transfer_type = row["transfer_type"]
+        type_label = "Перевод по номеру карты" if transfer_type == "card" else "Перевод по СБП"
+
         try:
             await bot.edit_message_text(
                 chat_id=row["user_id"],
                 message_id=row["client_message_id"],
                 text=f"💸 Заявка #{order_id}\n\n"
-                     f"💸 Тип: Перевод по СБП\n"
+                     f"💸 Тип: {type_label}\n"
                      f"💰 Сумма: {amount:.2f} RUB\n\n"
                      f"📊 Статус: 🟢 Перевод выполнен\n\n"
                      f"✅ Исполнитель сообщает что перевод сделан.\n"
@@ -357,7 +378,7 @@ def register_worker(dp, bot):
         worker_msg = await call.message.answer(
             f"⏳ Ожидаем подтверждения от клиента\n\n"
             f"🆔 <b>ID заявки:</b> #{order_id}\n"
-            f"💸 <b>Услуга:</b> Перевод по СБП\n"
+            f"💸 <b>Услуга:</b> {type_label}\n"
             f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
             f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>",
             parse_mode="HTML",
