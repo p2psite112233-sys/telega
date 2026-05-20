@@ -22,15 +22,12 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
     commission_usdt = round(total_usdt - amount_usdt, 4)
     worker_net_usdt = round(commission_usdt * 0.8, 4)
     worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
-    unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
+    unique_text = "✅ Уникальная" if unique else "❌ Обычная"
     return (
-        f"🆔 <b>ID заявки:</b> #{order_id}\n"
-        f"💳 <b>Услуга:</b> Карта под оплату\n"
-        f"🃏 {unique_text}\n\n"
-        f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB (~{amount_usdt:.4f} USDT)\n"
-        f"💎 <b>Клиент оплатит:</b> {total_rub:.2f} RUB\n\n"
-        f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-        f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
+        f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+        f"💰 {amount:.2f} RUB · {unique_text}\n\n"
+        f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+        f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
     )
 
 def order_info_transfer(order_id: int, amount: float, total_usdt: float, transfer_type: str,
@@ -43,21 +40,21 @@ def order_info_transfer(order_id: int, amount: float, total_usdt: float, transfe
     worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
 
     if transfer_type == "sbp":
-        type_label = "📲 Перевод по СБП"
-        requisite_label = f"📱 <b>Телефон:</b> <code>{phone_or_card}</code>"
+        type_label = "Перевод по СБП"
+        req = f"▸ 📱 <code>{phone_or_card}</code>"
     else:
-        type_label = "💳 Перевод по номеру карты"
-        requisite_label = f"💳 <b>Номер карты:</b> <code>{phone_or_card}</code>"
+        type_label = "Перевод по номеру карты"
+        req = f"▸ 💳 <code>{phone_or_card}</code>"
 
     return (
-        f"🆔 <b>ID заявки:</b> #{order_id}\n"
-        f"💸 <b>Услуга:</b> {type_label}\n\n"
-        f"💰 <b>Сумма перевода:</b> {amount:.2f} RUB\n"
-        f"{requisite_label}\n"
-        f"🏦 <b>Банк:</b> {bank}\n"
-        f"👤 <b>Получатель:</b> {name}\n\n"
-        f"💵 <b>Ваш чистый заработок:</b> +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-        f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>"
+        f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+        f"💰 {amount:.2f} RUB\n\n"
+        f"📋 Куда переводим:\n"
+        f"{req}\n"
+        f"▸ 🏦 {bank}\n"
+        f"▸ 👤 {name}\n\n"
+        f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
+        f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
     )
 
 def register_worker(dp, bot):
@@ -227,7 +224,6 @@ def register_worker(dp, bot):
         is_unique = order["is_unique"] or False
         transfer_type = order["transfer_type"]
 
-        # СБП или перевод по карте
         if transfer_type in ("sbp", "card"):
             phone_or_card = order["transfer_phone"] or ""
             bank = order["transfer_bank"] or ""
@@ -235,21 +231,23 @@ def register_worker(dp, bot):
 
             if transfer_type == "sbp":
                 type_label = "Перевод по СБП"
-                req_label = f"📱 Телефон: <code>{phone_or_card}</code>"
-                done_cb = f"sbp_done_{order_id}"
+                req_label = f"▸ 📱 <code>{phone_or_card}</code>"
             else:
                 type_label = "Перевод по номеру карты"
-                req_label = f"💳 Номер карты: <code>{phone_or_card}</code>"
-                done_cb = f"sbp_done_{order_id}"  # используем тот же хендлер
+                req_label = f"▸ 💳 <code>{phone_or_card}</code>"
 
             new_msg = await bot.send_message(
                 chat_id=order["user_id"],
-                text=f"🎉 Заявка #{order_id}\n\n"
-                     f"💸 Тип: {type_label}\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n\n"
-                     f"📊 Статус: 🟢 В работе\n"
-                     f"👨‍💻 Исполнитель принял заявку\n\n"
-                     f"⏳ Ожидайте перевода",
+                text=(
+                    f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+                    f"💰 {amount:.2f} RUB\n\n"
+                    f"📋 Куда переводим:\n"
+                    f"{req_label}\n"
+                    f"▸ 🏦 {bank}\n"
+                    f"▸ 👤 {name}\n\n"
+                    f"🟢 В работе · 👨‍💻 Исполнитель принял заявку\n\n"
+                    f"⏳ Ожидайте перевода"
+                ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")],
@@ -270,11 +268,10 @@ def register_worker(dp, bot):
                 pass
 
             worker_msg = await call.message.answer(
-                f"✅ Вы взяли заявку #{order_id}\n\n"
-                f"{order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank, name)}",
+                order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank, name),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=done_cb)],
+                    [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
@@ -283,15 +280,15 @@ def register_worker(dp, bot):
             await db.db_execute("UPDATE orders SET worker_message_id=$1 WHERE id=$2", worker_msg.message_id, order_id)
 
         else:
-            # Карта под оплату
             new_msg = await bot.send_message(
                 chat_id=order["user_id"],
-                text=f"🎉 Заявка #{order_id}\n\n"
-                     f"💳 Услуга: Карта под оплату\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n\n"
-                     f"📊 Статус: 🟢 В работе\n"
-                     f"👨‍💻 Исполнитель уже готовит реквизиты\n\n"
-                     f"⏳ Ожидайте реквизитов для оплаты",
+                text=(
+                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"💰 {amount:.2f} RUB\n\n"
+                    f"🟢 В работе · 👨‍💻 Исполнитель готовит реквизиты\n\n"
+                    f"⏳ Ожидайте реквизитов для оплаты"
+                ),
+                parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
@@ -310,8 +307,7 @@ def register_worker(dp, bot):
                 pass
 
             await call.message.answer(
-                f"✅ Вы взяли заказ #{order_id}\n\n"
-                f"{order_info(order_id, amount, total_usdt, unique=is_unique)}",
+                order_info(order_id, amount, total_usdt, unique=is_unique),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
@@ -345,12 +341,13 @@ def register_worker(dp, bot):
             await bot.edit_message_text(
                 chat_id=row["user_id"],
                 message_id=row["client_message_id"],
-                text=f"💸 Заявка #{order_id}\n\n"
-                     f"💸 Тип: {type_label}\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n\n"
-                     f"📊 Статус: 🟢 Перевод выполнен\n\n"
-                     f"✅ Исполнитель сообщает что перевод сделан.\n"
-                     f"Подтвердите получение или откройте спор.",
+                text=(
+                    f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+                    f"💰 {amount:.2f} RUB\n\n"
+                    f"🟢 Перевод выполнен\n\n"
+                    f"✅ Исполнитель сообщает что перевод сделан.\n"
+                    f"Подтвердите получение или откройте спор."
+                ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")],
@@ -376,11 +373,10 @@ def register_worker(dp, bot):
         worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
 
         worker_msg = await call.message.answer(
+            f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
+            f"💰 {amount:.2f} RUB\n\n"
             f"⏳ Ожидаем подтверждения от клиента\n\n"
-            f"🆔 <b>ID заявки:</b> #{order_id}\n"
-            f"💸 <b>Услуга:</b> {type_label}\n"
-            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
-            f"📊 <b>Итог к зачислению вам: {worker_total_usdt:.4f} USDT</b>",
+            f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -458,16 +454,16 @@ def register_worker(dp, bot):
         else:
             new_msg = await bot.send_message(
                 chat_id=user_id,
-                text=f"🎉 Заявка #{order_id}\n\n"
-                     f"💳 Услуга: Карта под оплату\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n\n"
-                     f"📊 Статус: 🟢 В работе\n\n"
-                     f"💳 Реквизиты для оплаты:\n"
-                     f"🏦 Банк: {card['bank']}\n"
-                     f"💳 Номер карты: <code>{card['card_number']}</code>\n"
-                     f"📅 Срок: {card['expiry']}\n"
-                     f"🔐 CVV: <code>{card['cvv']}</code>\n\n"
-                     f"⏳ Запросите код для успешной оплаты",
+                text=(
+                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"💰 {amount:.2f} RUB\n\n"
+                    f"📋 Реквизиты для оплаты:\n"
+                    f"▸ 🏦 {card['bank']}\n"
+                    f"▸ 💳 <code>{card['card_number']}</code>\n"
+                    f"▸ 📅 {card['expiry']}\n"
+                    f"▸ 🔐 <code>{card['cvv']}</code>\n\n"
+                    f"⏳ Запросите код для успешной оплаты"
+                ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
@@ -484,9 +480,8 @@ def register_worker(dp, bot):
 
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
         worker_msg = await call.message.answer(
-            f"✅ Реквизиты по заявке #{order_id} отправлены\n\n"
             f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
-            f"⏳ Ожидаем запрос кода от клиента",
+            f"✅ Реквизиты отправлены · ⏳ Ждём запрос кода",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -540,13 +535,11 @@ def register_worker(dp, bot):
             await update_client_dispute_msg(bot, order_id, call.from_user.id, amount, d_reason, card_data=card_data, code_requested=True)
         else:
             card_data = order["dispute_card_data"] or ""
-            card_block = f"💳 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
+            card_block = f"📋 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
             new_client_msg = await bot.send_message(
                 call.from_user.id,
-                f"🎉 Заявка #{order_id}\n\n"
-                f"💳 Услуга: Карта под оплату\n"
-                f"💰 Сумма: {amount:.2f} RUB\n\n"
-                f"📊 Статус: 🟢 В работе\n\n"
+                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                f"💰 {amount:.2f} RUB\n\n"
                 f"{card_block}"
                 f"🔑 Код запрошен у исполнителя\n"
                 f"⏳ Ожидайте код...",
@@ -570,8 +563,8 @@ def register_worker(dp, bot):
 
         new_worker_msg = await bot.send_message(
             worker_id,
-            f"🔑 Клиент запросил код\n\n"
-            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}",
+            f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
+            f"🔑 Клиент запросил код",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
@@ -641,17 +634,16 @@ def register_worker(dp, bot):
             await update_client_dispute_msg(bot, order_id, user_id, amount, d_reason, card_data=card_data, code=code)
         else:
             card_data = row["dispute_card_data"] or ""
-            card_block = f"💳 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
+            card_block = f"📋 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
             new_msg = await bot.send_message(
                 chat_id=user_id,
-                text=f"🎉 Заявка #{order_id}\n\n"
-                     f"🆔 ID: #{order_id}\n"
-                     f"💳 Услуга: Карта под оплату\n"
-                     f"💰 Сумма: {amount:.2f} RUB\n\n"
-                     f"📊 Статус: 🟢 В работе\n\n"
-                     f"{card_block}"
-                     f"🔐 Код подтверждения: <code>{code}</code>\n\n"
-                     f"⏳ Нажмите кнопку ниже, если оплата прошла успешно",
+                text=(
+                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"💰 {amount:.2f} RUB\n\n"
+                    f"{card_block}"
+                    f"🔐 Код подтверждения: <code>{code}</code>\n\n"
+                    f"⏳ Нажмите кнопку ниже, если оплата прошла успешно"
+                ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
@@ -667,9 +659,8 @@ def register_worker(dp, bot):
                 logger.error(f"[process_code] delete error: {e}")
 
         worker_msg = await message.answer(
-            f"✅ Код отправлен клиенту\n\n"
             f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
-            f"⏳ Ожидаем подтверждения от клиента",
+            f"✅ Код отправлен · ⏳ Ждём подтверждения клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
