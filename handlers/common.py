@@ -81,28 +81,18 @@ def register_common(dp, bot: Bot):
             return False
 
     async def try_attach_referrer(referred_id: int, referrer_id: int, from_username: str = None):
-        """Единая функция привязки реферера с жесткими проверками ролей и истории"""
-        # Воркеры и админы не могут быть чьими-то рефералами
         if get_role(referred_id) in ["worker", "admin"]:
             return
-
-        # Проверяем, что у пользователя вообще нет истории заказов
         order_count = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1", referred_id)
         if order_count and order_count["count"] > 0:
             return
-
-        # Проверяем, нет ли уже существующей привязки в БД
         existing = await db.db_fetchone("SELECT referred_id FROM referrals WHERE referred_id=$1", referred_id)
         if existing:
             return
-
-        # Атомарная вставка
         res = await db.db_execute(
             "INSERT INTO referrals (referrer_id, referred_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
             referrer_id, referred_id
         )
-        
-        # Отправляем уведомление только если запись реально создалась (INSERT 0 1)
         if res and "INSERT 0 1" in res:
             username = f"@{from_username}" if from_username else f"ID: {referred_id}"
             try:
@@ -124,7 +114,6 @@ def register_common(dp, bot: Bot):
             uid
         )
 
-        # Логика рефералов для незарегистрированных/новых пользователей, которые не подписаны
         if role not in ["worker", "admin"]:
             is_subscribed = await check_subscription(uid)
             if not is_subscribed:
@@ -148,7 +137,6 @@ def register_common(dp, bot: Bot):
                 )
                 return
 
-        # Если пользователь подписан или имеет иммунитет (воркер/админ), пробуем привязать сразу
         args = message.text.split()
         if len(args) > 1:
             try:
@@ -203,8 +191,6 @@ def register_common(dp, bot: Bot):
         ])
         await message.answer_photo(photo=BANNER_FILE_ID, caption=text, reply_markup=kb, parse_mode="HTML")
 
-    # --- ЛОГИКА ПОПОЛНЕНИЯ ---
-
     @dp.callback_query(F.data == "check_sub")
     async def check_sub(call: types.CallbackQuery, state: FSMContext):
         uid = call.from_user.id
@@ -212,7 +198,6 @@ def register_common(dp, bot: Bot):
         if not is_subscribed:
             return await call.answer("❌ Вы ещё не подписались на канал!", show_alert=True)
 
-        # Вытаскиваем отложенного реферера, если он был
         data = await state.get_data()
         pending_referrer = data.get("pending_referrer")
         if pending_referrer:
@@ -220,7 +205,7 @@ def register_common(dp, bot: Bot):
             await state.update_data(pending_referrer=None)
 
         await call.message.delete()
-        
+
         text = (
             "<b>🏠 Send$Paid — Главное меню</b>\n\n"
             "<blockquote>Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
@@ -307,8 +292,6 @@ def register_common(dp, bot: Bot):
             reply_markup=kb
         )
         asyncio.create_task(check_payment_loop(bot, message.from_user.id, invoice_id, to_credit))
-
-    # --- ЛОГИКА СОЗДАНИЯ ЗАКАЗА ---
 
     @dp.callback_query(F.data == "client_card")
     async def order_start(call: types.CallbackQuery, state: FSMContext):
@@ -414,39 +397,34 @@ def register_common(dp, bot: Bot):
                 ])
             )
 
-        unique_text = "✅ Уникальная карта" if unique else "❌ Обычная карта"
+        unique_text = "✅ Уникальная" if unique else "❌ Обычная"
 
+        # Сообщение клиенту — новый стиль
         client_msg = await message.answer(
-            f"🎉 Заявка принята в обработку\n\n"
-            f"🆔 ID: #{order_id}\n"
-            f"💳 Услуга: Карта под оплату\n"
-            f"💰 Сумма: {rub:.2f} RUB\n"
-            f"💎 К оплате: {total:.2f} RUB\n"
-            f"🃏 {unique_text}\n\n"
-            f"📊 Статус: 🟡 Новая\n"
-            f"👨‍💻 Исполнитель: назначается\n\n"
+            f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
+            f"💰 {rub:.2f} RUB · {unique_text}\n"
+            f"💎 К оплате: {total:.2f} RUB\n\n"
+            f"🟡 Новая · 👨‍💻 Исполнитель назначается\n\n"
             f"⏳ Ожидайте — скоро свяжемся с вами",
+            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
             ])
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", client_msg.message_id, order_id)
 
+        # Сообщение воркерам — новый стиль
         text_order = (
-            f"📥 <b>Новая заявка #{order_id}</b>\n\n"
-            f"💳 <b>Услуга:</b> Карта под оплату\n"
-            f"🃏 {unique_text}\n\n"
-            f"💰 <b>Сумма перевода:</b> {rub:.2f} RUB\n"
-            f"💎 <b>Клиент оплатит:</b> {total:.2f} RUB\n\n"
-            f"🔐 <b>Резерв:</b> {total_usdt:.4f} USDT\n"
+            f"⚡️ <b>Новая заявка #{order_id} · Карта под оплату</b>\n\n"
+            f"💰 {rub:.2f} RUB · {unique_text}\n"
+            f"💎 Клиент оплатит: {total:.2f} RUB\n\n"
+            f"🔐 Резерв: {total_usdt:.4f} USDT\n"
             f"⏱ Время на принятие: 1500 сек"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
         ])
         await broadcast_order(bot, text_order, kb, order_id=order_id)
-
-    # --- ДОБАВЛЕНИЕ КАРТЫ ВОРКЕРОМ ---
 
     @dp.message(WorkerRegStates.waiting_for_card_data)
     async def process_card_data(message: types.Message, state: FSMContext):
@@ -491,8 +469,6 @@ def register_common(dp, bot: Bot):
             reply_markup=keyboard
         )
 
-    # --- АДМИН-КОМАНДЫ ---
-
     @dp.message(F.text.startswith("/setworker"))
     async def cmd_set_worker(message: types.Message):
         if message.from_user.id != ADMIN_ID:
@@ -515,11 +491,10 @@ async def cleanup_expired_orders(bot: Bot):
     while True:
         await asyncio.sleep(60)
         try:
-            # Атомарно отменяем просроченные ордера ОДНИМ запросом (через RETURNING)
             expired = await db.db_fetchall("SELECT * FROM cancel_expired_orders()")
             if not expired:
                 continue
-            
+
             for order in expired:
                 logger.info(f"Cleanup: Order #{order['id']} cancelled")
                 broadcasts = await db.db_fetchall(
@@ -567,14 +542,12 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
             if "UPDATE 1" in res:
                 await db.add_balance(user_id, to_credit)
                 balance = await db.get_balance(user_id)
-                
-                # Начисляем 3% рефереру (с защитой от выплат за воркеров)
+
                 try:
                     ref_row = await db.db_fetchone(
                         "SELECT referrer_id FROM referrals WHERE referred_id=$1", user_id
                     )
                     if ref_row and ref_row["referrer_id"]:
-                        # Проверяем роль реферера на всякий случай
                         if get_role(ref_row["referrer_id"]) not in ["worker", "admin"]:
                             bonus = round(to_credit * 0.03, 4)
                             await db.add_balance(ref_row["referrer_id"], bonus)
