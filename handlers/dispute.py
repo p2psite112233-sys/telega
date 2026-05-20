@@ -33,6 +33,10 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
         extra += f"📱 <b>Телефон:</b> <code>{transfer_phone}</code>\n"
         extra += f"🏦 <b>Банк:</b> {transfer_bank}\n"
         extra += f"👤 <b>Получатель:</b> {transfer_name}\n\n"
+    elif transfer_type == "card":
+        extra += f"💳 <b>Номер карты:</b> <code>{transfer_phone}</code>\n"
+        extra += f"🏦 <b>Банк:</b> {transfer_bank}\n"
+        extra += f"👤 <b>Получатель:</b> {transfer_name}\n\n"
     else:
         if card_data:
             extra += f"💳 <b>Реквизиты для оплаты:</b>\n{card_data}\n\n"
@@ -52,7 +56,7 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
 
 def dispute_client_kb(order_id, transfer_type=None):
     buttons = []
-    if transfer_type == "sbp":
+    if transfer_type in ("sbp", "card"):
         buttons.append([InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")])
     else:
         buttons.append([InlineKeyboardButton(text="💳 Оплата получена", callback_data=f"client_paid_{order_id}")])
@@ -91,7 +95,6 @@ async def update_client_dispute_msg(bot, order_id, user_id, amount, reason, card
 
 def register_dispute(dp, bot):
 
-    # --- СПОР КЛИЕНТА ---
     @dp.callback_query(F.data.startswith("dispute_"))
     async def dispute_start(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[1])
@@ -99,14 +102,12 @@ def register_dispute(dp, bot):
         row = await db.db_fetchone("SELECT status, worker_id FROM orders WHERE id=$1 AND user_id=$2", order_id, uid)
         if not row or row["status"] != "IN_PROGRESS":
             return await call.answer("❌ Спор недоступен для этой заявки", show_alert=True)
-
         await state.set_state(DisputeStates.waiting_for_reason)
         await state.update_data(dispute_order_id=order_id, dispute_worker_id=row["worker_id"])
         try:
             await call.message.delete()
         except:
             pass
-
         msg = await call.message.answer(
             f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора — что пошло не так?",
             parse_mode="HTML",
@@ -223,7 +224,7 @@ def register_dispute(dp, bot):
         if worker_id:
             try:
                 worker_kb_buttons = []
-                if transfer_type == "sbp":
+                if transfer_type in ("sbp", "card"):
                     worker_kb_buttons.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
                 else:
                     if not card_data:
@@ -232,11 +233,8 @@ def register_dispute(dp, bot):
                 worker_kb_buttons.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
                 worker_kb_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
-                await bot.send_message(
-                    worker_id, dispute_text,
-                    parse_mode="HTML",
-                    reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb_buttons)
-                )
+                await bot.send_message(worker_id, dispute_text, parse_mode="HTML",
+                                       reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb_buttons))
             except:
                 pass
 
@@ -248,7 +246,6 @@ def register_dispute(dp, bot):
         )
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_msg.message_id, order_id)
 
-    # --- СПОР ВОРКЕРА ---
     @dp.callback_query(F.data.startswith("worker_dispute_"))
     async def worker_dispute_start(call: types.CallbackQuery, state: FSMContext):
         order_id = int(call.data.split("_")[2])
@@ -256,14 +253,12 @@ def register_dispute(dp, bot):
         row = await db.db_fetchone("SELECT status, user_id FROM orders WHERE id=$1 AND worker_id=$2", order_id, uid)
         if not row or row["status"] != "IN_PROGRESS":
             return await call.answer("❌ Спор недоступен", show_alert=True)
-
         await state.set_state(DisputeStates.waiting_for_worker_reason)
         await state.update_data(dispute_order_id=order_id, dispute_client_id=row["user_id"])
         try:
             await call.message.delete()
         except:
             pass
-
         msg = await call.message.answer(
             f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
             parse_mode="HTML",
@@ -371,8 +366,7 @@ def register_dispute(dp, bot):
         if client_id:
             try:
                 new_client_msg = await bot.send_message(
-                    client_id, dispute_text,
-                    parse_mode="HTML",
+                    client_id, dispute_text, parse_mode="HTML",
                     reply_markup=dispute_client_kb(order_id, transfer_type=transfer_type)
                 )
                 await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", new_client_msg.message_id, order_id)
@@ -382,7 +376,7 @@ def register_dispute(dp, bot):
         await state.clear()
 
         worker_kb_buttons2 = []
-        if transfer_type == "sbp":
+        if transfer_type in ("sbp", "card"):
             worker_kb_buttons2.append([InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")])
         else:
             if not card_data:
@@ -402,7 +396,6 @@ def register_dispute(dp, bot):
     async def noop_handler(call: types.CallbackQuery):
         await call.answer()
 
-    # --- РЕШЕНИЕ СПОРА АДМИНОМ ---
     @dp.callback_query(F.data.startswith("dispute_refund_"))
     async def dispute_refund(call: types.CallbackQuery):
         order_id = int(call.data.split("_")[2])
