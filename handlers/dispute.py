@@ -47,6 +47,7 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
 
     return (
         f"🆔 <b>Заявка:</b> #{order_id}\n"
+        f"💸 <b>Тип:</b> {get_type_label(transfer_type)}\n"
         f"💰 <b>Сумма:</b> {amount:.2f} RUB\n\n"
         f"{extra}"
         f"📝 <b>Причина:</b> {reason}\n\n"
