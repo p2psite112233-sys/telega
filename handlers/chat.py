@@ -81,7 +81,7 @@ def register_chat(dp, bot):
             f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏪ Назад", callback_data=view_cb)]
+                [InlineKeyboardButton(text="⏪ Назад", callback_data=f"chat_back_{order_id}")]
             ])
         )
         await state.update_data(chat_prompt_msg_id=msg.message_id)
@@ -118,7 +118,7 @@ def register_chat(dp, bot):
             f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏪ Назад", callback_data=view_cb)]
+                [InlineKeyboardButton(text="⏪ Назад", callback_data=f"chat_back_{order_id}")]
             ])
         )
         await state.update_data(chat_prompt_msg_id=msg.message_id)
@@ -127,6 +127,8 @@ def register_chat(dp, bot):
     @dp.callback_query(F.data.startswith("chat_back_"), ChatStates.waiting_for_message)
     async def chat_back(call: types.CallbackQuery, state: FSMContext):
         await call.answer()
+        data = await state.get_data()
+        prompt_msg_id = data.get("chat_prompt_msg_id")
         await state.clear()
         order_id = int(call.data.split("_")[2])
         uid = call.from_user.id
@@ -134,6 +136,11 @@ def register_chat(dp, bot):
             await call.message.delete()
         except:
             pass
+        if prompt_msg_id:
+            try:
+                await bot.delete_message(chat_id=call.message.chat.id, message_id=prompt_msg_id)
+            except:
+                pass
         row = await db.db_fetchone("SELECT user_id, worker_id FROM orders WHERE id=$1", order_id)
         if not row:
             return
@@ -165,7 +172,6 @@ def register_chat(dp, bot):
         status = row["status"]
         transfer_type = row["transfer_type"]
 
-        # Если спор — показываем сообщение спора
         if status == "DISPUTE":
             from handlers.dispute import build_dispute_msg, dispute_client_kb
             reason = row["dispute_reason"] or "—"
@@ -266,7 +272,6 @@ def register_chat(dp, bot):
         is_unique = row["is_unique"] or False
         transfer_type = row["transfer_type"]
 
-        # Если спор — показываем сообщение спора
         if status == "DISPUTE":
             from handlers.dispute import build_dispute_msg
             worker_kb = []
