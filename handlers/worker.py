@@ -22,12 +22,15 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
     commission_usdt = round(total_usdt - amount_usdt, 4)
     worker_net_usdt = round(commission_usdt * 0.8, 4)
     worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
-    unique_text = "✅ Уникальная" if unique else "❌ Обычная"
+    unique_text = f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Уникальная" if unique else f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Обычная"
     return (
-        f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-        f"💰 {amount:.2f} RUB · {unique_text}\n\n"
-        f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-        f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+        f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+        f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB · {unique_text}\n\n"
+        f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Детали сделки:\n"
+        f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+        f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+        f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Итого к зачислению: {worker_total_usdt:.4f} USDT\n"
+        f"▸ <tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Средства зарезервированы"
     )
 
 def order_info_transfer(order_id: int, amount: float, total_usdt: float, transfer_type: str,
