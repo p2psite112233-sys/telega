@@ -228,6 +228,7 @@ def register_client(dp, bot):
         & ~F.data.startswith("client_topup")
         & ~F.data.startswith("client_transfer")
         & ~F.data.startswith("client_phone")
+        & ~F.data.startswith("client_withdraw")
         & ~F.data.startswith("send_req_")
         & ~F.data.startswith("worker_confirm_")
         & ~F.data.startswith("worker_apply")
@@ -283,6 +284,7 @@ def register_client(dp, bot):
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="client_ref")],
                 [InlineKeyboardButton(text="📚 История", callback_data="client_history")],
+                [InlineKeyboardButton(text="💸 Вывод", callback_data="client_withdraw")],
                 [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
             ])
             await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
