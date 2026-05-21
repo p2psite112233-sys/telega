@@ -191,11 +191,13 @@ def register_client(dp, bot):
                 f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
             )
             worker_text = (
-                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
-                f"✅ Заявка завершена!"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
             )
 
         try:
