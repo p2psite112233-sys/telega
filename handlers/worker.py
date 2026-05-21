@@ -507,7 +507,9 @@ def register_worker(dp, bot):
         await call.answer("✅ Реквизиты отправлены клиенту", show_alert=True)
         worker_msg = await call.message.answer(
             f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
-            f"✅ Реквизиты отправлены · ⏳ Ждём запрос кода",
+            f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
+            f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Реквизиты отправлены\n"
+            f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ждём запрос кода от клиента",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
