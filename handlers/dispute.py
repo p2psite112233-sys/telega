@@ -55,18 +55,17 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
         type_label = "Карта под оплату"
         req_block = ""
         if card_data:
-            req_block += f"📋 Реквизиты для оплаты:\n{card_data}\n\n"
+            req_block += f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n"
         if code_requested and not code:
-            req_block += f"🔐 Вы запросили код подтверждения, ожидайте.\n⏳ ...\n\n"
+            req_block += f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Вы запросили код подтверждения, ожидайте.\n<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> ...\n\n"
         if code:
-            req_block += f"🔐 Код подтверждения: <code>{code}</code>\n\n"
-
+            req_block += f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Код подтверждения: <code>{code}</code>\n\n"
     return (
-        f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-        f"💰 {amount:.2f} RUB\n\n"
+        f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+        f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
         f"{req_block}"
-        f"📝 Причина: {reason}\n\n"
-        f"⚠️ По сделке открыт спор"
+        f"<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> Причина: {reason}\n\n"
+        f"<tg-emoji emoji-id='5276240711795107620'>⚠️</tg-emoji> По сделке открыт спор"
     )
 
 
