@@ -698,7 +698,8 @@ def register_worker(dp, bot):
             chat_id=worker_id,
             text=(
                 f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
-                f"✅ Код отправлен · ⏳ Ждём подтверждения клиента"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Код отправлен\n"
+                f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ждём подтверждения клиента"
             ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
