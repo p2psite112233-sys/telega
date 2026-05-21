@@ -302,7 +302,7 @@ def register_common(dp, bot: Bot):
         await call.message.answer_photo(
             photo=CARD_BANNER_FILE_ID,
             caption=(
-                "<b>💳 Карта под оплату</b>\n\n"
+                f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Карта под оплату</b>\n\n"
                 "<blockquote>Вам нужна уникальная карта?\n"
                 "Уникальная карта — карта которую никто кроме вас не использовал.\n"
                 "Дополнительная комиссия: <b>+5%</b></blockquote>"
@@ -333,7 +333,7 @@ def register_common(dp, bot: Bot):
         msg = await call.message.answer_photo(
             photo=ORDER_BANNER_FILE_ID,
             caption=(
-                f"<b>💳 Карта под оплату</b>\n\n"
+                f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Карта под оплату</b>\n\n"
                 f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
                 f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
                 f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
