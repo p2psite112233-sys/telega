@@ -592,7 +592,7 @@ def register_worker(dp, bot):
         new_worker_msg = await bot.send_message(
             worker_id,
             f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
-            f"🔑 Клиент запросил код",
+            f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Клиент запросил код",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
