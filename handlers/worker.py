@@ -478,14 +478,14 @@ def register_worker(dp, bot):
             new_msg = await bot.send_message(
                 chat_id=user_id,
                 text=(
-                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"📋 Реквизиты для оплаты:\n"
-                    f"▸ 🏦 {card['bank']}\n"
-                    f"▸ 💳 <code>{card['card_number']}</code>\n"
-                    f"▸ 📅 {card['expiry']}\n"
-                    f"▸ 🔐 <code>{card['cvv']}</code>\n\n"
-                    f"⏳ Запросите код для успешной оплаты"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n"
+                    f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {card['bank']}\n"
+                    f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{card['card_number']}</code>\n"
+                    f"▸ <tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> {card['expiry']}\n"
+                    f"▸ <tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> <code>{card['cvv']}</code>\n\n"
+                    f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Запросите код для успешной оплаты"
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
