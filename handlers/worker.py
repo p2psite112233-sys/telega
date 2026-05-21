@@ -666,11 +666,11 @@ def register_worker(dp, bot):
             new_msg = await bot.send_message(
                 chat_id=user_id,
                 text=(
-                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
                     f"{card_block}"
-                    f"🔐 Код подтверждения: <code>{code}</code>\n\n"
-                    f"⏳ Нажмите кнопку ниже, если оплата прошла успешно"
+                    f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Код подтверждения: <code>{code}</code>\n\n"
+                    f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Нажмите кнопку ниже, если оплата прошла успешно"
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
