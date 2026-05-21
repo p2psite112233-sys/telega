@@ -338,7 +338,7 @@ def register_chat(dp, bot):
         card_block = f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
         code_block = f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Код подтверждения: <code>{code}</code>\n\n" if code else ""
         if code:
-            footer = "⏳ Нажмите кнопку ниже, если оплата прошла успешно"
+            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Нажмите кнопку ниже, если оплата прошла успешно"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
@@ -346,7 +346,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         elif card_data:
-            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Запросите код для успешной оплаты"
+             = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Запросите код для успешной оплаты"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
@@ -354,7 +354,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         else:
-            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте реквизитов для оплаты"
+             = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте реквизитов для оплаты"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
