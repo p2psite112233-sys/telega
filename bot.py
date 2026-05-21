@@ -3,12 +3,12 @@ import os
 import sys
 import aiohttp
 from aiohttp import web
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 sys.stdout.reconfigure(line_buffering=True)
 print("==> Starting bot...", flush=True)
-from config import BOT_TOKEN
+from config import BOT_TOKEN, ADMIN_ID
 from db import init_db
 from handlers.common import register_common, load_workers, cleanup_expired_orders
 from handlers.worker import register_worker
@@ -35,6 +35,22 @@ register_withdraw(dp, bot)
 register_transfer(dp, bot)
 register_phone(dp, bot)
 register_common(dp, bot)
+
+# =======================================================
+# ВРЕМЕННЫЙ ХЕНДЛЕР ДЛЯ ПАРСИНГА ПРЕМИУМ-ЭМОДЗИ (только для админа)
+# =======================================================
+@dp.message(F.from_user.id == ADMIN_ID)
+async def get_premium_emoji_id(message: types.Message):
+    if message.entities:
+        for entity in message.entities:
+            if entity.type == "custom_emoji":
+                await message.answer(
+                    f"💎 <b>ID эмодзи из текста:</b>\n<code>{entity.custom_emoji_id}</code>\n\n"
+                    f"Строка для кода:\n"
+                    f"<code>&lt;tg-emoji emoji-id='{entity.custom_emoji_id}'&gt;⭐&lt;/tg-emoji&gt;</code>"
+                )
+                return
+# =======================================================
 
 async def handle(request):
     return web.Response(text="Bot is running")
