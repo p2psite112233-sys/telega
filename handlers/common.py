@@ -397,13 +397,13 @@ def register_common(dp, bot: Bot):
                 ])
             )
 
-        unique_text = "✅ Уникальная" if unique else "❌ Обычная"
+        unique_text = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Уникальная" if unique else "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Обычная"
 
         # Сообщение клиенту — новый стиль
         client_msg = await message.answer(
             f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
             f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {rub:.2f} RUB · {unique_text}\n"
-            f"<tg-emoji emoji-id='5278578973595427038'>💎</tg-emoji> К оплате: {total:.2f} RUB\n\n"
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> К оплате: {total:.2f} RUB\n\n"
             f"<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji> Новая · <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель назначается\n\n"
             f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте — скоро свяжемся с вами",
             parse_mode="HTML",
