@@ -12,7 +12,7 @@ from handlers.dispute import DisputeStates
 logger = logging.getLogger(__name__)
 
 CLIENT_MENU_TEXT = (
-    "<b>🏠 Send$Paid — Главное меню</b>\n\n"
+    "<b><tg-emoji emoji-id='5298668674532538341'>🏠</tg-emoji> Send$Paid — Главное меню</b>\n\n"
     "<blockquote>Бот поможет получить карту под оплату, перевести деньги на карту/СБП, "
     "пополнить номер телефона или оплатить готовый QR-код.\n"
     "Все этапы заявки фиксируются внутри сервиса.</blockquote>\n\n"
