@@ -557,17 +557,13 @@ def register_worker(dp, bot):
             card_data = order["dispute_card_data"] or ""
             await update_client_dispute_msg(bot, order_id, call.from_user.id, amount, d_reason, card_data=card_data, code_requested=True)
         else:
-            card_data = order["dispute_card_data"] or ""
-            card_block = f"📋 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
+           card_data = order["dispute_card_data"] or ""
+            card_block = f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
             new_client_msg = await bot.send_message(
                 call.from_user.id,
                 f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
                 f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
-                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n"
-                f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {card['bank']}\n"
-                f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{card['card_number']}</code>\n"
-                f"▸ <tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> {card['expiry']}\n"
-                f"▸ <tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> <code>{card['cvv']}</code>\n\n"
+                f"{card_block}"
                 f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Код запрошен у исполнителя\n"
                 f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте код...",
                 parse_mode="HTML",
@@ -662,7 +658,7 @@ def register_worker(dp, bot):
             await update_client_dispute_msg(bot, order_id, user_id, amount, d_reason, card_data=card_data, code=code)
         else:
             card_data = row["dispute_card_data"] or ""
-            card_block = f"📋 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
+            card_block = f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
             new_msg = await bot.send_message(
                 chat_id=user_id,
                 text=(
