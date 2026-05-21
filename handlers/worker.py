@@ -463,11 +463,11 @@ def register_worker(dp, bot):
         is_unique = order["is_unique"] or False
 
         card_data = (
-            f"🏦 Банк: {card['bank']}\n"
-            f"💳 Номер карты: <code>{card['card_number']}</code>\n"
-            f"📅 Срок: {card['expiry']}\n"
-            f"🔐 CVV: <code>{card['cvv']}</code>"
-        )
+    f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> Банк: {card['bank']}\n"
+    f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Номер карты: <code>{card['card_number']}</code>\n"
+    f"<tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> Срок: {card['expiry']}\n"
+    f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> CVV: <code>{card['cvv']}</code>"
+)
         await db.db_execute("UPDATE orders SET dispute_card_data=$1 WHERE id=$2", card_data, order_id)
 
         if status == "DISPUTE":
