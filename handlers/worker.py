@@ -557,7 +557,7 @@ def register_worker(dp, bot):
             card_data = order["dispute_card_data"] or ""
             await update_client_dispute_msg(bot, order_id, call.from_user.id, amount, d_reason, card_data=card_data, code_requested=True)
         else:
-           card_data = order["dispute_card_data"] or ""
+            card_data = order["dispute_card_data"] or ""
             card_block = f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
             new_client_msg = await bot.send_message(
                 call.from_user.id,
