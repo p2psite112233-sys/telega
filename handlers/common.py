@@ -415,11 +415,11 @@ def register_common(dp, bot: Bot):
 
         # Сообщение воркерам — новый стиль
         text_order = (
-            f"⚡️ <b>Новая заявка #{order_id} · Карта под оплату</b>\n\n"
-            f"💰 {rub:.2f} RUB · {unique_text}\n"
-            f"💎 Клиент оплатит: {total:.2f} RUB\n\n"
-            f"🔐 Резерв: {total_usdt:.4f} USDT\n"
-            f"⏱ Время на принятие: 1500 сек"
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>Новая заявка #{order_id} · Карта под оплату</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {rub:.2f} RUB · {unique_text}\n"
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Клиент оплатит: {total:.2f} RUB\n\n"
+            f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Резерв: {total_usdt:.4f} USDT\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>⏱</tg-emoji> Время на принятие: 1500 сек"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
