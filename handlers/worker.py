@@ -295,10 +295,14 @@ def register_worker(dp, bot):
             new_msg = await bot.send_message(
                 chat_id=order["user_id"],
                 text=(
-                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"🟢 В работе · 👨‍💻 Исполнитель готовит реквизиты\n\n"
-                    f"⏳ Ожидайте реквизитов для оплаты"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5278753302023004775'>📋</tg-emoji> Статус заявки:\n"
+                    f"▸ <tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> В работе\n"
+                    f"▸ <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель назначен\n"
+                    f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Реквизиты готовятся\n\n"
+                    f"<tg-emoji emoji-id='5276395476646653290'>💬</tg-emoji> Скоро исполнитель отправит реквизиты для оплаты"
+                    
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
