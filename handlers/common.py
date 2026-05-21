@@ -401,11 +401,11 @@ def register_common(dp, bot: Bot):
 
         # Сообщение клиенту — новый стиль
         client_msg = await message.answer(
-            f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-            f"💰 {rub:.2f} RUB · {unique_text}\n"
-            f"💎 К оплате: {total:.2f} RUB\n\n"
-            f"🟡 Новая · 👨‍💻 Исполнитель назначается\n\n"
-            f"⏳ Ожидайте — скоро свяжемся с вами",
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {rub:.2f} RUB · {unique_text}\n"
+            f"<tg-emoji emoji-id='5278578973595427038'>💎</tg-emoji> К оплате: {total:.2f} RUB\n\n"
+            f"<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji> Новая · <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель назначается\n\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте — скоро свяжемся с вами",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
