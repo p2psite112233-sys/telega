@@ -346,7 +346,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         elif card_data:
-             = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Запросите код для успешной оплаты"
+            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Запросите код для успешной оплаты"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
@@ -354,7 +354,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         else:
-             = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте реквизитов для оплаты"
+            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте реквизитов для оплаты"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
