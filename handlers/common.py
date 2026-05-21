@@ -175,7 +175,7 @@ def register_common(dp, bot: Bot):
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="💳 Карта под оплату", callback_data="client_card"),
+                InlineKeyboardButton(text="<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Карта под оплату", callback_data="client_card"),
                 InlineKeyboardButton(text="🏦 Перевод на карту", callback_data="client_transfer")
             ],
             [
