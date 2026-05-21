@@ -209,6 +209,7 @@ def register_chat(dp, bot):
 
         # Завершена
         if status == "DONE":
+            client_balance_new = await db.get_balance(uid)
             if transfer_type == "sbp":
                 phone_or_card = row["transfer_phone"] or ""
                 bank = row["transfer_bank"] or ""
@@ -245,9 +246,13 @@ def register_chat(dp, bot):
                 )
             else:
                 text = (
-                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"✅ Заявка завершена!\n💸 Списано: {total_usdt:.4f} USDT"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Итог сделки:\n"
+                    f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Оплата подтверждена\n"
+                    f"▸ <tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Остаток баланса: {client_balance_new:.2f} USDT\n\n"
+                    f"<tg-emoji emoji-id='5406926593698312391'>🎉</tg-emoji> Спасибо за использование Send$Paid!"
                 )
             await bot.send_message(uid, text, parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -286,10 +291,10 @@ def register_chat(dp, bot):
         if transfer_type == "phone":
             phone = row["transfer_phone"] or ""
             text = (
-                f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
-                f"💰 {amount:.2f} RUB\n"
-                f"📱 Номер: <code>{phone}</code>\n\n"
-                f"🟢 В работе · ⏳ Ожидайте пополнения"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Пополнение номера</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n"
+                f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> Номер: <code>{phone}</code>\n\n"
+                f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> В работе · <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте пополнения"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"client_paid_{order_id}")],
@@ -330,8 +335,8 @@ def register_chat(dp, bot):
             return await call.answer()
 
         # Карта под оплату — в работе
-        card_block = f"📋 Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
-        code_block = f"🔐 Код подтверждения: <code>{code}</code>\n\n" if code else ""
+        card_block = f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
+        code_block = f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Код подтверждения: <code>{code}</code>\n\n" if code else ""
         if code:
             footer = "⏳ Нажмите кнопку ниже, если оплата прошла успешно"
             kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -341,7 +346,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         elif card_data:
-            footer = "⏳ Запросите код для успешной оплаты"
+            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Запросите код для успешной оплаты"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
@@ -349,15 +354,15 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         else:
-            footer = "⏳ Ожидайте реквизитов для оплаты"
+            footer = "<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте реквизитов для оплаты"
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         text = (
-            f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-            f"💰 {amount:.2f} RUB\n\n"
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
             f"{card_block}{code_block}{footer}"
         )
         await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
