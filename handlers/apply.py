@@ -42,7 +42,7 @@ def register_apply(dp, bot: Bot):
         username = f"@{call.from_user.username}" if call.from_user.username else f"ID: {uid}"
         await bot.send_message(
             call.message.chat.id,
-            f"<b>📝 Заполнение анкеты исполнителя</b>\n\n"
+            f"<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> <b>Заполнение анкеты исполнителя</b>\n\n"
             f"<blockquote>Ответьте на вопросы по шагам. На каждом этапе можно вернуться назад или остановить заполнение.</blockquote>\n\n"
             f"1. Ваш основной аккаунт {username}?",
             parse_mode="HTML",
@@ -67,7 +67,7 @@ def register_apply(dp, bot: Bot):
         )
         formatted = next_apply.strftime("%d %B %Y г., %H:%M")
         await call.message.edit_text(
-            f"❌ <b>Заявка недоступна</b>\n\n"
+            f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> <b>Заявка недоступна</b>\n\n"
             f"Напишите нам с другого аккаунта.\n\n"
             f"Повторную заявку можно подать после {formatted}.",
             parse_mode="HTML",
@@ -82,7 +82,7 @@ def register_apply(dp, bot: Bot):
     async def apply_q1_yes(call: types.CallbackQuery, state: FSMContext):
         await state.update_data(main_acc="Да")
         await call.message.edit_text(
-            "<b>2️⃣ Опыт в сфере обменов и оплат</b>\n\n"
+            f"<tg-emoji emoji-id='5242293676834579345'>2️⃣</tg-emoji> <b>Опыт в сфере обменов и оплат</b>\n\n"
             "Выберите вариант, который лучше всего описывает ваш текущий опыт.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -104,7 +104,7 @@ def register_apply(dp, bot: Bot):
         await state.update_data(experience=exp_map.get(exp_key, "Не указано"))
         
         await call.message.edit_text(
-            "<b>3️⃣ Банки для работы</b>\n\nКакими банками (РФ) вы располагаете чаще всего?",
+            f"<tg-emoji emoji-id='5242652525647127686'>3️⃣</tg-emoji> <b>Банки для работы</b>\n\nКакими банками (РФ) вы располагаете чаще всего?",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Сбербанк / Т-Банк", callback_data="apply_q3_major")],
@@ -145,7 +145,7 @@ def register_apply(dp, bot: Bot):
         buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
         
         await call.message.edit_text(
-            "<b>4️⃣ Направления работы</b>\n\nВыберите варианты и нажмите «➡️ Далее».",
+            f"<tg-emoji emoji-id='5242287453426969423'>4️⃣</tg-emoji> <b>Направления работы</b>\n\nВыберите варианты и нажмите «➡️ Далее».",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
 
@@ -184,7 +184,7 @@ def register_apply(dp, bot: Bot):
         buttons.append([InlineKeyboardButton(text="💔 Отмена", callback_data="client_back_menu")])
         
         await call.message.edit_text(
-            "<b>5️⃣ Активные рабочие чаты</b>\n\nВыберите чаты, в которых состояли.",
+            f"<tg-emoji emoji-id='5242407832770340528'>5️⃣</tg-emoji> <b>Активные рабочие чаты</b>\n\nВыберите чаты, в которых состояли.",
             parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
 
@@ -204,7 +204,7 @@ def register_apply(dp, bot: Bot):
     async def apply_q6_start(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(WorkerRegStates.waiting_for_extra_info)
         text = (
-            "<b>6️⃣ Дополнительная информация</b>\n\n"
+            f"<tg-emoji emoji-id='5242669447818277073'>6️⃣</tg-emoji> <b>Дополнительная информация</b>\n\n"
             "<blockquote>Напишите всё, что поможет при рассмотрении анкеты (опыт, другие чаты, график).</blockquote>"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -231,13 +231,13 @@ def register_apply(dp, bot: Bot):
         sel_chats = ", ".join([chats_map.get(c, c) for c in data.get("chats", [])])
         
         report = (
-            "📋 <b>Предпросмотр анкеты</b>\n\n"
-            f"👤 <b>Аккаунт:</b> Да\n"
-            f"📊 <b>Опыт:</b> {data.get('experience')}\n"
-            f"🏦 <b>Банки:</b> {data.get('bank')}\n"
-            f"🛠 <b>Направления:</b> {sel_dirs}\n"
-            f"💬 <b>Чаты:</b> {sel_chats}\n"
-            f"📝 <b>Доп. инфо:</b> <i>{data.get('extra_info')}</i>\n\n"
+            f"<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>Предпросмотр анкеты</b>\n\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Аккаунт:</b> Да\n"
+            f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Опыт:</b> {data.get('experience')}\n"
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Банки:</b> {data.get('bank')}\n"
+            f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Направления:</b> {sel_dirs}\n"
+            f"<tg-emoji emoji-id='5276395476646653290'>💬</tg-emoji> <b>Чаты:</b> {sel_chats}\n"
+            f"<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> <b>Доп. инфо:</b> <i>{data.get('extra_info')}</i>\n\n"
             "<blockquote>Проверьте данные. Если всё верно — отправляйте анкету.</blockquote>"
         )
         
@@ -262,13 +262,13 @@ def register_apply(dp, bot: Bot):
         sel_chats = ", ".join([chats_map.get(c, c) for c in data.get("chats", [])])
 
         admin_text = (
-            "📩 <b>НОВАЯ ЗАЯВКА ВОРКЕРА</b>\n\n"
-            f"👤 <b>Юзер:</b> {username} (<code>{uid}</code>)\n"
-            f"📊 <b>Опыт:</b> {data.get('experience')}\n"
-            f"🏦 <b>Банки:</b> {data.get('bank')}\n"
-            f"🛠 <b>Направления:</b> {sel_dirs}\n"
-            f"💬 <b>Чаты:</b> {sel_chats}\n"
-            f"📝 <b>Доп:</b> {data.get('extra_info')}"
+            f"<tg-emoji emoji-id='5445355530111437729'>📩</tg-emoji> <b>НОВАЯ ЗАЯВКА ВОРКЕРА</b>\n\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Юзер:</b> {username} (<code>{uid}</code>)\n"
+            f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Опыт:</b> {data.get('experience')}\n"
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Банки:</b> {data.get('bank')}\n"
+            f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Направления:</b> {sel_dirs}\n"
+            f"<tg-emoji emoji-id='5276395476646653290'>💬</tg-emoji> <b>Чаты:</b> {sel_chats}\n"
+            f"<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> <b>Доп:</b> {data.get('extra_info')}"
         )
 
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -285,7 +285,7 @@ def register_apply(dp, bot: Bot):
             logger.error(f"Error sending apply to admin: {e}")
 
         await call.message.edit_text(
-            "✅ <b>Заявка отправлена!</b>\n\nОжидайте решения администрации. Вам придет уведомление.",
+            f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> <b>Заявка отправлена!</b>\n\nОжидайте решения администрации. Вам придет уведомление.",
             parse_mode="HTML"
         )
         await state.clear()
