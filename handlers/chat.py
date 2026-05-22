@@ -417,7 +417,7 @@ def register_chat(dp, bot):
                 phone_or_card = row["transfer_phone"] or ""
                 bank = row["transfer_bank"] or ""
                 name = row["transfer_recipient_name"] or ""
-               text = (
+                text = (
                     f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по СБП</b>\n\n"
                     f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
                     f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
