@@ -368,6 +368,11 @@ def register_chat(dp, bot):
                 f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Реквизиты готовятся\n\n"
                 f"<tg-emoji emoji-id='5276395476646653290'>💬</tg-emoji> Скоро исполнитель отправит реквизиты для оплаты"
             )
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
+                [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
+            ])
         text = (
             f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
             f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
