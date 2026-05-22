@@ -38,7 +38,7 @@ def register_admin(dp, bot: Bot):
             [InlineKeyboardButton(text="🆘 Активные споры", callback_data="adm_disputes")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
         ])
-        text = "🛠 <b>Панель управления проектом</b>"
+        text = f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Панель управления проектом</b>"
         try:
             await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except Exception:
@@ -66,7 +66,7 @@ def register_admin(dp, bot: Bot):
             ],
             [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
         ])
-        await call.message.edit_text("📈 <b>Выберите период отчета:</b>", reply_markup=kb, parse_mode="HTML")
+        await call.message.edit_text(f"<tg-emoji emoji-id='5244837092042750681'>📈</tg-emoji> <b>Выберите период отчета:</b>", reply_markup=kb, parse_mode="HTML")
         await call.answer()
 
     @dp.callback_query(F.data.startswith("st_"))
@@ -89,11 +89,10 @@ def register_admin(dp, bot: Bot):
             profit_row = await db.db_fetchone("SELECT SUM(amount) as total FROM bot_profit WHERE created_at >= $1", since_naive)
             net_profit = float(profit_row['total'] or 0) if profit_row and profit_row['total'] else 0.0
             text = (
-                f"📊 <b>Статистика за {label}</b>\n\n"
-                f"👥 <b>Аудитория:</b>\n• Новых юзеров: <b>{new_users['count']}</b>\n• Всего в базе: <b>{total_users['count']}</b>\n\n"
-                f"📋 <b>Активность:</b>\n• Успешных сделок: <b>{done_count}</b>\n\n"
-                f"💰 <b>Финансы:</b>\n• Оборот: <code>{turnover_usdt:.4f}</code> USDT (<code>{turnover_rub:.0f}</code> RUB)\n• Прибыль бота: <b>{net_profit:.4f}</b> USDT"
-            )
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика за {label}</b>\n\n"
+                f"<tg-emoji emoji-id='5332724926216428039'>👥</tg-emoji> <b>Аудитория:</b>\n• Новых юзеров: <b>{new_users['count']}</b>\n• Всего в базе: <b>{total_users['count']}</b>\n\n"
+                f"<tg-emoji emoji-id='5197269100878907942'>📋</tg-emoji> <b>Активность:</b>\n• Успешных сделок: <b>{done_count}</b>\n\n"
+                f"<tg-emoji emoji-id='5312123810638483121'>💰</tg-emoji> <b>Финансы:</b>\n• Оборот: <code>{turnover_usdt:.4f}</code> USDT (<code>{turnover_rub:.0f}</code> RUB)\n• Прибыль бота: <b>{net_profit:.4f}</b> USDT")
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_stats_menu")]])
             await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except:
@@ -114,13 +113,13 @@ def register_admin(dp, bot: Bot):
             d_val = float(deposits['total'] or 0)
             w_val = float(withdraws['total'] or 0)
             text = (
-                "💰 <b>Финансовый аудит</b>\n\n"
-                f"💵 <b>Прибыль бота:</b> <code>{p_val:.4f}</code> USDT\n"
-                f"💸 <b>Выплачено:</b> <code>{w_val:.4f}</code> USDT\n"
+                "<tg-emoji emoji-id='5312123810638483121'>💰</tg-emoji> <b>Финансовый аудит</b>\n\n"
+                f"<tg-emoji emoji-id='5291914649481007565'>💵</tg-emoji> <b>Прибыль бота:</b> <code>{p_val:.4f}</code> USDT\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> <b>Выплачено:</b> <code>{w_val:.4f}</code> USDT\n"
                 "--------------------------\n"
-                f"💰 <b>Оборот:</b> <code>{t_usdt:.4f}</code> USDT (<code>{t_rub:.0f}</code> RUB)\n"
-                f"➕ <b>Пополнено:</b> <code>{d_val:.4f}</code> USDT\n"
-                f"📥 <b>Выведено воркерами:</b> <code>{w_val:.4f}</code> USDT"
+                f"<tg-emoji emoji-id='5312123810638483121'>💰</tg-emoji> <b>Оборот:</b> <code>{t_usdt:.4f}</code> USDT (<code>{t_rub:.0f}</code> RUB)\n"
+                f"<tg-emoji emoji-id='5397916757333654639'>➕</tg-emoji> <b>Пополнено:</b> <code>{d_val:.4f}</code> USDT\n"
+                f"<tg-emoji emoji-id='5443127283898405358'>📥</tg-emoji> <b>Выведено воркерами:</b> <code>{w_val:.4f}</code> USDT"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]])
             await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
@@ -133,7 +132,7 @@ def register_admin(dp, bot: Bot):
     async def workers_manage(call: types.CallbackQuery):
         count = await db.db_fetchone("SELECT COUNT(*) FROM workers")
         apps = await db.db_fetchone("SELECT COUNT(*) FROM worker_applications WHERE status='pending'")
-        text = f"👥 <b>Управление воркерами</b>\n\nВ штате: <b>{count['count']}</b>\nЗаявок: <b>{apps['count']}</b>"
+        text = f"<tg-emoji emoji-id='5332724926216428039'>👥</tg-emoji> <b>Управление воркерами</b>\n\nВ штате: <b>{count['count']}</b>\nЗаявок: <b>{apps['count']}</b>"
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📨 Просмотр заявок", callback_data="adm_view_apps")],
             [InlineKeyboardButton(text="👥 Все воркеры", callback_data="adm_list_workers")],
@@ -172,10 +171,10 @@ def register_admin(dp, bot: Bot):
         done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
         balance = await db.get_balance(uid)
         text = (
-            f"👤 <b>Воркер {name}</b>\n"
-            f"ID: <code>{uid}</code>\n\n"
-            f"✅ Выполнено: {done['count']} заявок\n"
-            f"💰 Баланс: {balance:.2f} USDT"
+           f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Воркер {name}</b>\n"
+           f"ID: <code>{uid}</code>\n\n"
+           f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Выполнено: {done['count']} заявок\n"
+           f"<tg-emoji emoji-id='5312123810638483121'>💰</tg-emoji> Баланс: {balance:.2f} USDT"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔴 Снять с должности", callback_data=f"adm_fire_worker_{uid}")],
@@ -190,24 +189,24 @@ def register_admin(dp, bot: Bot):
         await db.db_execute("DELETE FROM workers WHERE user_id=$1", uid)
         set_role(uid, "user")
         try:
-            await bot.send_message(uid, "❌ Вы были сняты с должности воркера.")
+            await bot.send_message(uid, f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Вы были сняты с должности воркера.")
         except:
             pass
-        await call.message.edit_text(f"✅ Воркер <code>{uid}</code> снят с должности.", parse_mode="HTML",
+        await call.message.edit_text(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Воркер <code>{uid}</code> снят с должности.", parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_list_workers")]]))
         await call.answer()
 
     @dp.callback_query(F.data == "adm_view_apps")
     async def view_apps(call: types.CallbackQuery):
         apps = await db.db_fetchall("SELECT user_id FROM worker_applications WHERE status='pending' LIMIT 5")
-        if not apps: return await call.answer("📩 Заявок нет", show_alert=True)
+        if not apps: return await call.answer(f"<tg-emoji emoji-id='5445355530111437729'>📩</tg-emoji> Заявок нет", show_alert=True)
         await call.message.delete()
         for app in apps:
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="✅ Принять", callback_data=f"adm_ap_yes_{app['user_id']}"),
                 InlineKeyboardButton(text="❌ Отклонить", callback_data=f"adm_ap_no_{app['user_id']}")
             ]])
-            await call.message.answer(f"👤 Заявка от: <code>{app['user_id']}</code>", reply_markup=kb, parse_mode="HTML")
+            await call.message.answer(f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Заявка от: <code>{app['user_id']}</code>", reply_markup=kb, parse_mode="HTML")
         await call.answer()
 
     # Хендлер для кнопок из apply.py и adm_view_apps
@@ -220,20 +219,20 @@ def register_admin(dp, bot: Bot):
             await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
             await db.db_execute("UPDATE worker_applications SET status='accepted' WHERE user_id=$1", t_id)
             set_role(t_id, "worker")
-            try: await bot.send_message(t_id, "🎉 Ваша заявка на роль оплатчика одобрена!\n\nЖелаем удачной работы и успешных начинаний!❤️")
+            try: await bot.send_message(t_id, f"<tg-emoji emoji-id='5406926593698312391'>🎉</tg-emoji> Ваша заявка на роль оплатчика одобрена!\n\nЖелаем удачной работы и успешных начинаний!<tg-emoji emoji-id='5192879906295397710'>❤️</tg-emoji>")
             except: pass
-            await call.message.edit_text(f"✅ Юзер <code>{t_id}</code> принят в воркеры.", parse_mode="HTML")
+            await call.message.edit_text(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Юзер <code>{t_id}</code> принят в воркеры.", parse_mode="HTML")
         else:
             await db.db_execute("UPDATE worker_applications SET status='declined' WHERE user_id=$1", t_id)
-            try: await bot.send_message(t_id, "❌ Ваша заявка на роль оплатчика отклонена.\n\nПопробуйте подать заявку позже. Возможно мы пересмотрим решение.")
+            try: await bot.send_message(t_id, f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Ваша заявка на роль оплатчика отклонена.\n\nПопробуйте подать заявку позже. Возможно мы пересмотрим решение.")
             except: pass
-            await call.message.edit_text(f"❌ Юзер <code>{t_id}</code> отклонён.", parse_mode="HTML")
+            await call.message.edit_text(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Юзер <code>{t_id}</code> отклонён.", parse_mode="HTML")
         await call.answer()
 
     @dp.callback_query(F.data == "adm_add_worker_manual")
     async def add_worker_start(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.waiting_for_worker_id)
-        await call.message.edit_text("🔢 Введите ID для назначения воркером:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]]))
+        await call.message.edit_text(f"<tg-emoji emoji-id='5361741454685256344'>🔢</tg-emoji> Введите ID для назначения воркером:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]]))
         await call.answer()
 
     @dp.message(AdminStates.waiting_for_worker_id)
@@ -242,7 +241,7 @@ def register_admin(dp, bot: Bot):
             t_id = int(message.text.strip())
             await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
             set_role(t_id, "worker")
-            await message.answer(f"✅ Юзер {t_id} теперь воркер.")
+            await message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Юзер {t_id} теперь воркер.")
             await state.clear()
             await send_admin_menu(message)
         except: await message.answer("Ошибка в ID.")
@@ -250,7 +249,7 @@ def register_admin(dp, bot: Bot):
     @dp.callback_query(F.data == "adm_broadcast")
     async def broadcast_start(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.waiting_for_broadcast_text)
-        await call.message.edit_text("📢 Введите текст рассылки:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]]))
+        await call.message.edit_text(f"<tg-emoji emoji-id='5298609030321691620'>📢</tg-emoji> Введите текст рассылки:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]]))
         await call.answer()
 
     @dp.message(AdminStates.waiting_for_broadcast_text)
@@ -258,7 +257,7 @@ def register_admin(dp, bot: Bot):
         query = "SELECT user_id FROM balances UNION SELECT user_id FROM workers UNION SELECT user_id FROM invoices"
         rows = await db.db_fetchall(query)
         u_ids = list(set([r['user_id'] for r in rows]))
-        status_msg = await message.answer(f"🚀 Рассылка на {len(u_ids)} чел...")
+        status_msg = await message.answer(f"<tg-emoji emoji-id='5188481279963715781'>🚀</tg-emoji> Рассылка на {len(u_ids)} чел...",)
         sent = 0
         for uid in u_ids:
             try:
@@ -266,7 +265,7 @@ def register_admin(dp, bot: Bot):
                 sent += 1
                 await asyncio.sleep(0.05)
             except: pass
-        await status_msg.edit_text(f"✅ Рассылка завершена. Получили: {sent}")
+        await status_msg.edit_text(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Рассылка завершена. Получили: {sent}")
         await state.clear()
         await send_admin_menu(message)
 
@@ -274,7 +273,7 @@ def register_admin(dp, bot: Bot):
     async def balance_menu(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.waiting_for_balance_uid)
         await call.message.edit_text(
-            "💳 <b>Управление балансом</b>\n\nВведите ID пользователя:",
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Управление балансом</b>\n\nВведите ID пользователя:",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]])
         )
@@ -285,7 +284,7 @@ def register_admin(dp, bot: Bot):
         try:
             t_id = int(message.text.strip())
         except:
-            return await message.answer("❌ Введите корректный ID (число).")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректный ID (число)."))
         balance = await db.get_balance(t_id)
         await state.update_data(balance_uid=t_id)
         kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -295,7 +294,7 @@ def register_admin(dp, bot: Bot):
             [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
         ])
         await message.answer(
-            f"👤 ID: <code>{t_id}</code>\n💰 Баланс: <b>{balance:.2f} USDT</b>",
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> ID: <code>{t_id}</code>\n<tg-emoji emoji-id='5312123810638483121'>💰</tg-emoji> Баланс: <b>{balance:.2f} USDT</b>",
             parse_mode="HTML", reply_markup=kb
         )
         await state.clear()
@@ -304,7 +303,7 @@ def register_admin(dp, bot: Bot):
     async def bal_reset(call: types.CallbackQuery):
         t_id = int(call.data.split("_")[3])
         await db.db_execute("UPDATE balances SET balance=0 WHERE user_id=$1", t_id)
-        await call.message.edit_text(f"✅ Баланс юзера <code>{t_id}</code> обнулён.", parse_mode="HTML",
+        await call.message.edit_text(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Баланс юзера <code>{t_id}</code> обнулён.", parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]]))
         await call.answer()
 
@@ -317,7 +316,7 @@ def register_admin(dp, bot: Bot):
         await state.update_data(bal_action=action, bal_uid=t_id)
         word = "пополнения" if action == "add" else "списания"
         await call.message.edit_text(
-            f"💳 Введите сумму {word} в USDT:",
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Введите сумму {word} в USDT:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Отмена", callback_data="adm_back_to_main")]])
         )
         await call.answer()
@@ -328,16 +327,16 @@ def register_admin(dp, bot: Bot):
             amount = float(message.text.strip())
             if amount <= 0: raise ValueError
         except:
-            return await message.answer("❌ Введите корректную сумму.")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректную сумму.")
         data = await state.get_data()
         action = data.get("bal_action")
         t_id = data.get("bal_uid")
         if action == "add":
             await db.db_execute("UPDATE balances SET balance=balance+$1 WHERE user_id=$2", amount, t_id)
-            await message.answer(f"✅ Баланс юзера <code>{t_id}</code> пополнен на <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
+            await message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Баланс юзера <code>{t_id}</code> пополнен на <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
         else:
             await db.db_execute("UPDATE balances SET balance=GREATEST(balance-$1, 0) WHERE user_id=$2", amount, t_id)
-            await message.answer(f"✅ С баланса юзера <code>{t_id}</code> списано <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
+            await message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> С баланса юзера <code>{t_id}</code> списано <b>{amount:.2f} USDT</b>.", parse_mode="HTML")
         await state.clear()
         await send_admin_menu(message)
 
@@ -345,7 +344,7 @@ def register_admin(dp, bot: Bot):
     async def list_users(call: types.CallbackQuery):
         users = await db.db_fetchall("SELECT user_id, balance FROM balances ORDER BY user_id DESC LIMIT 30")
         if not users:
-            return await call.answer("👤 Юзеров нет", show_alert=True)
+            return await call.answer(f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Юзеров нет", show_alert=True)
         buttons = []
         for u in users:
             uid = u['user_id']
@@ -357,7 +356,7 @@ def register_admin(dp, bot: Bot):
                 name = f"ID: {uid}"
             buttons.append([InlineKeyboardButton(text=f"👤 {name} • {bal:.2f} USDT", callback_data=f"adm_user_info_{uid}")])
         buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")])
-        await call.message.edit_text("👤 <b>Все юзеры:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        await call.message.edit_text(f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Все юзеры:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
         await call.answer()
 
     @dp.callback_query(F.data.startswith("adm_user_info_"))
@@ -374,11 +373,11 @@ def register_admin(dp, bot: Bot):
         cancelled = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='CANCELLED'", uid)
         active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status IN ('NEW', 'IN_PROGRESS')", uid)
         text = (
-            f"👤 <b>{name}</b>\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>{name}</b>\n"
             f"ID: <code>{uid}</code>\n\n"
-            f"💰 Баланс: <b>{balance:.2f} USDT</b>\n"
-            f"🔒 Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
-            f"📊 <b>Статистика заявок:</b>\n"
+            f"<tg-emoji emoji-id='5312123810638483121'>💰</tg-emoji> Баланс: <b>{balance:.2f} USDT</b>\n"
+            f"<tg-emoji emoji-id='5296369303661067030'>🔒</tg-emoji> Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
+            f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика заявок:</b>\n"
             f"• Завершённых: {done['count']}\n"
             f"• Отменённых: {cancelled['count']}\n"
             f"• Активных: {active['count']}"
@@ -401,12 +400,12 @@ def register_admin(dp, bot: Bot):
         await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
         await db.unfreeze_back(row['user_id'], float(row['total_usdt'] or 0))
         try:
-            await bot.send_message(row['user_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства возвращены на баланс.")
+            await bot.send_message(row['user_id'], f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор по заявке #{order_id} решён в вашу пользу. Средства возвращены на баланс.")
         except: pass
         try:
             await call.message.delete()
         except: pass
-        await call.message.answer(f"✅ Спор #{order_id} — средства возвращены клиенту.")
+        await call.message.answer(ff"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор #{order_id} — средства возвращены клиенту.")
         await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data.startswith("dispute_pay_worker_"))
@@ -418,15 +417,15 @@ def register_admin(dp, bot: Bot):
         await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1", order_id)
         await db.unfreeze_to_worker(row['user_id'], row['worker_id'], float(row['total_usdt'] or 0), float(row['amount_usdt'] or 0))
         try:
-            await bot.send_message(row['worker_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства зачислены.")
+            await bot.send_message(row['worker_id'], f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор по заявке #{order_id} решён в вашу пользу. Средства зачислены.")
         except: pass
         try:
-            await bot.send_message(row['user_id'], f"❌ Спор по заявке #{order_id} решён не в вашу пользу.")
+            await bot.send_message(row['user_id'], f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Спор по заявке #{order_id} решён не в вашу пользу.)
         except: pass
         try:
             await call.message.delete()
         except: pass
-        await call.message.answer(f"✅ Спор #{order_id} — средства отправлены воркеру.")
+        await call.message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор #{order_id} — средства отправлены воркеру.")
         await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data == "adm_disputes")
@@ -439,12 +438,12 @@ def register_admin(dp, bot: Bot):
         buttons = []
         for d in disputes:
             buttons.append([InlineKeyboardButton(
-                text=f"🆘 #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
+                text=f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
                 callback_data=f"adm_dispute_info_{d['id']}"
             )])
         buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")])
         await call.message.edit_text(
-            f"🆘 <b>Активные споры</b>\n\nВсего: {len(disputes)}",
+            f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>Активные споры</b>\n\nВсего: {len(disputes)}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
@@ -459,11 +458,11 @@ def register_admin(dp, bot: Bot):
         if not row:
             return await call.answer("❌ Спор не найден или уже решён", show_alert=True)
         text = (
-            f"🆘 <b>Спор по заявке #{order_id}</b>\n\n"
-            f"👤 Клиент: <code>{row['user_id']}</code>\n"
-            f"👷 Воркер: <code>{row['worker_id']}</code>\n"
-            f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
-            f"💎 Заморожено: {float(row['total_usdt'] or 0):.4f} USDT"
+            f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>Спор по заявке #{order_id}</b>\n\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Клиент: <code>{row['user_id']}</code>\n"
+            f"<tg-emoji emoji-id='5440660757194744323'>👷</tg-emoji> Воркер: <code>{row['worker_id']}</code>\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Сумма: {float(row['amount']):.2f} RUB\n"
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Заморожено: {float(row['total_usdt'] or 0):.4f} USDT"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
