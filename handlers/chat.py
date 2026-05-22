@@ -557,7 +557,7 @@ def register_chat(dp, bot):
 
         # Карта под оплату — в работе
         if code:
-           text = (
+            text = (
                 f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
                 f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
                 f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Код отправлен\n"
@@ -573,7 +573,7 @@ def register_chat(dp, bot):
                 f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
                 f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
                 f"▸ <tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Клиент запросил код"
-        )
+            )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -586,7 +586,7 @@ def register_chat(dp, bot):
                 f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
                 f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Реквизиты отправлены\n"
                 f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ждём запрос кода"
-        )
+            )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
