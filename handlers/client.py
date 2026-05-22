@@ -569,7 +569,7 @@ def register_client(dp, bot):
             )
             return await call.answer()
 
-            if call.data.startswith("history_order_"):
+        if call.data.startswith("history_order_"):
             order_id = int(call.data.split("_")[2])
             row = await db.db_fetchone(
                 "SELECT id, amount, total_usdt, status, transfer_type FROM orders WHERE id=$1 AND user_id=$2",
