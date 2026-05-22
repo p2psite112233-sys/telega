@@ -16,15 +16,17 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
     commission_usdt = round(total_usdt - amount_usdt, 4)
     worker_net_usdt = round(commission_usdt * 0.8, 4)
     worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
-    unique_text = "✅ Уникальная" if unique else "❌ Обычная"
+    unique_text = f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Уникальная" if unique else f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Обычная"
     return (
-        f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-        f"💰 {amount:.2f} RUB · {unique_text}\n\n"
-        f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-        f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+        f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+        f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB · {unique_text}\n\n"
+        f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Детали сделки:\n"
+        f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+        f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+        f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Итого к зачислению: {worker_total_usdt:.4f} USDT\n"
+        f"▸ <tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Средства зарезервированы"
     )
-
-
+    
 def order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank="", name=""):
     commission = max(round(amount * 0.20, 2), 30)
     total_rub = round(amount + commission, 2)
@@ -47,13 +49,15 @@ def order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_ca
         extra = ""
 
     return (
-        f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-        f"💰 {amount:.2f} RUB\n\n"
-        f"📋 Реквизиты:\n"
+        f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+        f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+        f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты:\n"
         f"{req}\n"
         f"{extra}\n"
-        f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-        f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+        f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Детали сделки:\n"
+        f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+        f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+        f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> К зачислению: {worker_total_usdt:.4f} USDT"
     )
 
 
@@ -99,7 +103,7 @@ def register_chat(dp, bot):
         except:
             pass
         msg = await call.message.answer(
-            f"📤 <b>Введите сообщение по сделке #{order_id}.</b>",
+            f"<tg-emoji emoji-id='5443127283898405358'>📤</tg-emoji> <b>Введите сообщение по сделке #{order_id}.</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="⏪ Назад", callback_data=f"chat_back_{order_id}")]
@@ -165,7 +169,7 @@ def register_chat(dp, bot):
             status_text = "✅ Завершена" if status == "DONE" else "❌ Отменена"
             await bot.send_message(
                 uid,
-                f"⚡️ Заявка #{order_id} · {status_text}",
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> Заявка #{order_id} · {status_text}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu" if uid == row["user_id"] else "lk_home")]
                 ])
@@ -173,11 +177,11 @@ def register_chat(dp, bot):
             return
 
         if uid == row["worker_id"]:
-            await bot.send_message(uid, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            await bot.send_message(uid, f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
             ]))
         else:
-            await bot.send_message(uid, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            await bot.send_message(uid, f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_client_order_{order_id}")]
             ]))
 
@@ -215,34 +219,37 @@ def register_chat(dp, bot):
                 bank = row["transfer_bank"] or ""
                 name = row["transfer_recipient_name"] or ""
                 text = (
-                    f"⚡️ <b>#{order_id} · Перевод по СБП</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"📋 Куда переводили:\n"
-                    f"▸ 📱 <code>{phone_or_card}</code>\n"
-                    f"▸ 🏦 {bank}\n"
-                    f"▸ 👤 {name}\n\n"
-                    f"✅ Заявка завершена!\n💸 Списано: {total_usdt:.4f} USDT"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по СБП</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
+                    f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>\n"
+                    f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                    f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                    f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!\n"
+                    f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT"
                 )
             elif transfer_type == "card":
                 phone_or_card = row["transfer_phone"] or ""
                 bank = row["transfer_bank"] or ""
                 name = row["transfer_recipient_name"] or ""
                 text = (
-                    f"⚡️ <b>#{order_id} · Перевод по номеру карты</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"📋 Куда переводили:\n"
-                    f"▸ 💳 <code>{phone_or_card}</code>\n"
-                    f"▸ 🏦 {bank}\n"
-                    f"▸ 👤 {name}\n\n"
-                    f"✅ Заявка завершена!\n💸 Списано: {total_usdt:.4f} USDT"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по номеру карты</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
+                    f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{phone_or_card}</code>\n"
+                    f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                    f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                    f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!\n"
+                    f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT"
                 )
             elif transfer_type == "phone":
                 phone = row["transfer_phone"] or ""
                 text = (
-                    f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n"
-                    f"📱 Номер: <code>{phone}</code>\n\n"
-                    f"✅ Заявка завершена!\n💸 Списано: {total_usdt:.4f} USDT"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Пополнение номера</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n"
+                    f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> Номер: <code>{phone}</code>\n\n"
+                    f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!\n"
+                    f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT"
                 )
             else:
                 text = (
@@ -263,7 +270,7 @@ def register_chat(dp, bot):
         # Отменена
         if status == "CANCELLED":
             await bot.send_message(uid,
-                f"⚡️ <b>#{order_id}</b> · ❌ Заявка отменена",
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id}</b> · <tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Заявка отменена",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
@@ -317,13 +324,13 @@ def register_chat(dp, bot):
                 type_label = "Перевод по номеру карты"
                 req_line = f"▸ 💳 <code>{phone_or_card}</code>"
             text = (
-                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"📋 Куда переводим:\n"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
                 f"{req_line}\n"
-                f"▸ 🏦 {bank}\n"
-                f"▸ 👤 {name}\n\n"
-                f"🟢 В работе · ⏳ Ожидайте перевода от исполнителя"
+                f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> В работе · <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте перевода от исполнителя"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")],
@@ -410,44 +417,58 @@ def register_chat(dp, bot):
                 phone_or_card = row["transfer_phone"] or ""
                 bank = row["transfer_bank"] or ""
                 name = row["transfer_recipient_name"] or ""
-                text = (
-                    f"⚡️ <b>#{order_id} · Перевод по СБП</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"📋 Куда переводили:\n"
-                    f"▸ 📱 <code>{phone_or_card}</code>\n"
-                    f"▸ 🏦 {bank}\n▸ 👤 {name}\n\n"
-                    f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                    f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n✅ Заявка завершена!"
+               text = (
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по СБП</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
+                    f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>\n"
+                    f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                    f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                    f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                    f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                    f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
                 )
             elif transfer_type == "card":
                 phone_or_card = row["transfer_phone"] or ""
                 bank = row["transfer_bank"] or ""
                 name = row["transfer_recipient_name"] or ""
                 text = (
-                    f"⚡️ <b>#{order_id} · Перевод по номеру карты</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"📋 Куда переводили:\n"
-                    f"▸ 💳 <code>{phone_or_card}</code>\n"
-                    f"▸ 🏦 {bank}\n▸ 👤 {name}\n\n"
-                    f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                    f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n✅ Заявка завершена!"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по номеру карты</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
+                    f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{phone_or_card}</code>\n"
+                    f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                    f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                    f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                    f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                    f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
                 )
             elif transfer_type == "phone":
                 phone = row["transfer_phone"] or ""
                 text = (
-                    f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n"
-                    f"📱 Номер: <code>{phone}</code>\n\n"
-                    f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                    f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n✅ Заявка завершена!"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Пополнение номера</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n"
+                    f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> Номер: <code>{phone}</code>\n\n"
+                    f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                    f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                    f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
                 )
             else:
-                unique_text = "✅ Уникальная" if is_unique else "❌ Обычная"
+                unique_text = f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Уникальная" if is_unique else f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Обычная"
                 text = (
-                    f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                    f"💰 {amount:.2f} RUB · {unique_text}\n\n"
-                    f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                    f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n✅ Заявка завершена!"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB · {unique_text}\n\n"
+                    f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                    f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                    f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                    f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
                 )
             await bot.send_message(uid, text, parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -458,7 +479,7 @@ def register_chat(dp, bot):
         # Отменена
         if status == "CANCELLED":
             await bot.send_message(uid,
-                f"⚡️ <b>#{order_id}</b> · ❌ Заявка отменена",
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id}</b> · <tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Заявка отменена",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
@@ -501,12 +522,14 @@ def register_chat(dp, bot):
             worker_net_usdt = round(commission_usdt * 0.8, 4)
             worker_total_usdt = round(amount_usdt + worker_net_usdt, 4)
             text = (
-                f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"📋 Реквизиты:\n"
-                f"▸ 📱 <code>{phone}</code>\n\n"
-                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Пополнение номера</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты:\n"
+                f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone}</code>\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Детали сделки:\n"
+                f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> К зачислению: {worker_total_usdt:.4f} USDT"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")],
@@ -534,14 +557,23 @@ def register_chat(dp, bot):
 
         # Карта под оплату — в работе
         if code:
-            text = f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n✅ Код отправлен · ⏳ Ждём подтверждения клиента"
+           text = (
+                f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Код отправлен\n"
+                f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ждём подтверждения клиента"
+            )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         elif code_req_flag:
-            text = f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n🔑 Клиент запросил код"
+            text = (
+                f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
+                f"▸ <tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Клиент запросил код"
+        )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
@@ -549,7 +581,12 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         elif card_data:
-            text = f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n✅ Реквизиты отправлены · ⏳ Ждём запрос кода"
+            text = (
+                f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Реквизиты отправлены\n"
+                f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ждём запрос кода"
+        )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
@@ -621,7 +658,7 @@ def register_chat(dp, bot):
         view_cb = f"chat_view_order_{order_id}" if role == "worker" else f"chat_view_client_order_{order_id}"
         await state.clear()
         await message.answer(
-            "📤 Сообщение отправлено.",
+            f"<tg-emoji emoji-id='5443127283898405358'>📤</tg-emoji> Сообщение отправлено.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=view_cb)]
             ])
