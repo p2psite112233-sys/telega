@@ -284,7 +284,7 @@ def register_admin(dp, bot: Bot):
         try:
             t_id = int(message.text.strip())
         except:
-            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректный ID (число)."))
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректный ID (число).")
         balance = await db.get_balance(t_id)
         await state.update_data(balance_uid=t_id)
         kb = InlineKeyboardMarkup(inline_keyboard=[
