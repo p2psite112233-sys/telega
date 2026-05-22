@@ -33,23 +33,23 @@ def build_dispute_msg(order_id, amount, reason, card_data="", code="", code_requ
     if transfer_type == "sbp":
         type_label = "Перевод по СБП"
         req_block = (
-            f"📋 Куда переводим:\n"
-            f"▸ 📱 <code>{transfer_phone}</code>\n"
-            f"▸ 🏦 {transfer_bank}\n"
-            f"▸ 👤 {transfer_name}\n\n"
+            f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
+            f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{transfer_phone}</code>\n"
+            f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {transfer_bank}\n"
+            f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {transfer_name}\n\n"
         )
     elif transfer_type == "card":
         type_label = "Перевод по номеру карты"
         req_block = (
-            f"📋 Куда переводим:\n"
-            f"▸ 💳 <code>{transfer_phone}</code>\n"
-            f"▸ 🏦 {transfer_bank}\n"
-            f"▸ 👤 {transfer_name}\n\n"
+            f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
+            f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{transfer_phone}</code>\n"
+            f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {transfer_bank}\n"
+            f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {transfer_name}\n\n"
         )
     elif transfer_type == "phone":
         type_label = "Пополнение номера"
         req_block = (
-            f"📱 Номер: <code>{transfer_phone}</code>\n\n"
+            f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> Номер: <code>{transfer_phone}</code>\n\n"
         )
     else:
         type_label = "Карта под оплату"
@@ -124,7 +124,7 @@ def register_dispute(dp, bot):
         except:
             pass
         msg = await call.message.answer(
-            f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора — что пошло не так?",
+            f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора — что пошло не так?",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -158,7 +158,7 @@ def register_dispute(dp, bot):
             except:
                 pass
         msg = await message.answer(
-            "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите скрин подтверждения (или любое доказательство).",
+            f"<tg-emoji emoji-id='5210956306952758910'>📸</tg-emoji> <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите скрин подтверждения (или любое доказательство).",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -219,20 +219,20 @@ def register_dispute(dp, bot):
             await bot.send_photo(
                 ADMIN_ID, photo=photo_id,
                 caption=(
-                    f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
-                    f"⚡️ <b>Открыл:</b> Клиент\n"
-                    f"👤 Клиент: {username} (<code>{uid}</code>)\n"
-                    f"👷 Воркер: <code>{worker_id}</code>\n"
-                    f"💳 <b>Тип:</b> {type_label}\n"
-                    f"💰 Сумма: {amount:.2f} RUB ({total_usdt:.4f} USDT)\n\n"
-                    f"📝 <b>Причина:</b> {reason}"
+                    f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>СПОР по заявке #{order_id}</b>\n\n"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>Открыл:</b> Клиент\n"
+                    f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Клиент: {username} (<code>{uid}</code>)\n"
+                    f"<tg-emoji emoji-id='5440660757194744323'>👷</tg-emoji> Воркер: <code>{worker_id}</code>\n"
+                    f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Тип:</b> {type_label}\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Сумма: {amount:.2f} RUB ({total_usdt:.4f} USDT)\n\n"
+                    f"<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> <b>Причина:</b> {reason}"
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
                     [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")]
                 ])
-            )
+         )
         except Exception as e:
             logger.error(f"[dispute_screenshot] admin notify error: {e}")
 
@@ -275,7 +275,7 @@ def register_dispute(dp, bot):
         except:
             pass
         msg = await call.message.answer(
-            f"🆘 <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
+            f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>Открытие спора по заявке #{order_id}</b>\n\nШаг 1/2: Опишите причину спора.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -300,7 +300,7 @@ def register_dispute(dp, bot):
             except:
                 pass
         msg = await message.answer(
-            "📸 <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите доказательство.",
+            f"<tg-emoji emoji-id='5210956306952758910'>📸</tg-emoji> <b>Шаг 2/2: Отправьте скриншот</b>\n\nПрикрепите доказательство.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="dispute_cancel")]
@@ -361,20 +361,20 @@ def register_dispute(dp, bot):
             await bot.send_photo(
                 ADMIN_ID, photo=photo_id,
                 caption=(
-                    f"🆘 <b>СПОР по заявке #{order_id}</b>\n\n"
-                    f"⚡️ <b>Открыл:</b> Воркер\n"
-                    f"👷 Воркер: {username} (<code>{uid}</code>)\n"
-                    f"👤 Клиент: <code>{client_id}</code>\n"
-                    f"💳 <b>Тип:</b> {type_label}\n"
-                    f"💰 Сумма: {amount:.2f} RUB ({total_usdt_val:.4f} USDT)\n\n"
-                    f"📝 <b>Причина:</b> {reason}"
+                    f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>СПОР по заявке #{order_id}</b>\n\n"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>Открыл:</b> Воркер\n"
+                    f"<tg-emoji emoji-id='5440660757194744323'>👷</tg-emoji> Воркер: {username} (<code>{uid}</code>)\n"
+                    f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Клиент: <code>{client_id}</code>\n"
+                    f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Тип:</b> {type_label}\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Сумма: {amount:.2f} RUB ({total_usdt_val:.4f} USDT)\n\n"
+                    f"<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> <b>Причина:</b> {reason}"
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
                     [InlineKeyboardButton(text="💸 Отправить воркеру", callback_data=f"dispute_pay_worker_{order_id}")]
                 ])
-            )
+         )
         except Exception as e:
             logger.error(f"[worker_dispute_screenshot] admin notify error: {e}")
 
@@ -392,14 +392,14 @@ def register_dispute(dp, bot):
 
         worker_kb_buttons2 = []
         if transfer_type in ("sbp", "card", "phone"):
-            worker_kb_buttons2.append([InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")])
+                worker_kb_buttons2.append([InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")])
         else:
             if not card_data:
                 worker_kb_buttons2.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
-            worker_kb_buttons2.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
-        worker_kb_buttons2.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
-        worker_kb_buttons2.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
-        worker_kb_buttons2.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
+                worker_kb_buttons2.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
+                worker_kb_buttons2.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
+                worker_kb_buttons2.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
+                worker_kb_buttons2.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
         new_msg = await message.answer(
             dispute_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=worker_kb_buttons2),
@@ -420,12 +420,12 @@ def register_dispute(dp, bot):
         await db.db_execute("UPDATE orders SET status='CANCELLED' WHERE id=$1", order_id)
         await db.unfreeze_back(row['user_id'], float(row['total_usdt'] or 0))
         try:
-            await bot.send_message(row['user_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства возвращены на баланс.")
+            await bot.send_message(row['user_id'], f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор по заявке #{order_id} решён в вашу пользу. Средства возвращены на баланс.")
         except: pass
         try:
             await call.message.delete()
         except: pass
-        await call.message.answer(f"✅ Спор #{order_id} — средства возвращены клиенту.")
+        await call.message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор #{order_id} — средства возвращены клиенту.")
         await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data.startswith("dispute_pay_worker_"))
@@ -437,15 +437,15 @@ def register_dispute(dp, bot):
         await db.db_execute("UPDATE orders SET status='DONE' WHERE id=$1", order_id)
         await db.unfreeze_to_worker(row['user_id'], row['worker_id'], float(row['total_usdt'] or 0), float(row['amount_usdt'] or 0))
         try:
-            await bot.send_message(row['worker_id'], f"✅ Спор по заявке #{order_id} решён в вашу пользу. Средства зачислены.")
+            await bot.send_message(row['worker_id'], f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор по заявке #{order_id} решён в вашу пользу. Средства зачислены.")
         except: pass
         try:
-            await bot.send_message(row['user_id'], f"❌ Спор по заявке #{order_id} решён не в вашу пользу.")
+            await bot.send_message(row['user_id'], f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Спор по заявке #{order_id} решён не в вашу пользу.")
         except: pass
         try:
             await call.message.delete()
         except: pass
-        await call.message.answer(f"✅ Спор #{order_id} — средства отправлены воркеру.")
+        await call.message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор #{order_id} — средства отправлены воркеру.")
         await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data == "adm_disputes")
@@ -458,7 +458,7 @@ def register_dispute(dp, bot):
         buttons = []
         for d in disputes:
             buttons.append([InlineKeyboardButton(
-                text=f"🆘 #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
+                text=f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
                 callback_data=f"adm_dispute_info_{d['id']}"
             )])
         buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")])
@@ -479,12 +479,12 @@ def register_dispute(dp, bot):
             return await call.answer("❌ Спор не найден или уже решён", show_alert=True)
         type_label = get_type_label(row["transfer_type"])
         text = (
-            f"🆘 <b>Спор по заявке #{order_id}</b>\n\n"
-            f"👤 Клиент: <code>{row['user_id']}</code>\n"
-            f"👷 Воркер: <code>{row['worker_id']}</code>\n"
-            f"💳 Тип: {type_label}\n"
-            f"💰 Сумма: {float(row['amount']):.2f} RUB\n"
-            f"💎 Заморожено: {float(row['total_usdt'] or 0):.4f} USDT"
+            f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> <b>Спор по заявке #{order_id}</b>\n\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Клиент: <code>{row['user_id']}</code>\n"
+            f"<tg-emoji emoji-id='5440660757194744323'>👷</tg-emoji> Воркер: <code>{row['worker_id']}</code>\n"
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Тип: {type_label}\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Сумма: {float(row['amount']):.2f} RUB\n"
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Заморожено: {float(row['total_usdt'] or 0):.4f} USDT"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Вернуть клиенту", callback_data=f"dispute_refund_{order_id}")],
