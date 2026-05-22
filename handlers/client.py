@@ -124,13 +124,13 @@ def register_client(dp, bot):
 
         if transfer_type == "sbp":
             type_label = "Перевод по СБП"
-            req_line = f"▸ 📱 <code>{transfer_phone}</code>"
+            req_line = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{transfer_phone}</code>"
         elif transfer_type == "card":
             type_label = "Перевод по номеру карты"
-            req_line = f"▸ 💳 <code>{transfer_phone}</code>"
+            req_line = f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{transfer_phone}</code>"
         elif transfer_type == "phone":
             type_label = "Пополнение номера"
-            req_line = f"▸ 📱 <code>{transfer_phone}</code>"
+            req_line = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{transfer_phone}</code>"
         else:
             type_label = "Карта под оплату"
             req_line = None
@@ -144,51 +144,57 @@ def register_client(dp, bot):
 
         if transfer_type in ("sbp", "card"):
             client_text = (
-                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"📋 Куда переводили:\n"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
                 f"{req_line}\n"
-                f"▸ 🏦 {transfer_bank}\n"
-                f"▸ 👤 {transfer_name}\n\n"
-                f"✅ Заявка завершена!\n"
-                f"💸 Списано: {total_usdt:.4f} USDT\n"
-                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+                f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {transfer_bank}\n"
+                f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {transfer_name}\n\n"
+                f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Ваш баланс: {client_balance_new:.2f} USDT"
             )
             worker_text = (
-                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"📋 Куда переводили:\n"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводили:\n"
                 f"{req_line}\n"
-                f"▸ 🏦 {transfer_bank}\n"
-                f"▸ 👤 {transfer_name}\n\n"
-                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
-                f"✅ Заявка завершена!"
+                f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {transfer_bank}\n"
+                f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {transfer_name}\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
             )
         elif transfer_type == "phone":
             client_text = (
-                f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
-                f"💰 {amount:.2f} RUB\n"
-                f"📱 Номер: <code>{transfer_phone}</code>\n\n"
-                f"✅ Заявка завершена!\n"
-                f"💸 Списано: {total_usdt:.4f} USDT\n"
-                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Пополнение номера</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n"
+                f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> Номер: <code>{transfer_phone}</code>\n\n"
+                f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Ваш баланс: {client_balance_new:.2f} USDT"
             )
             worker_text = (
-                f"⚡️ <b>#{order_id} · Пополнение номера</b>\n\n"
-                f"💰 {amount:.2f} RUB\n"
-                f"📱 Номер: <code>{transfer_phone}</code>\n\n"
-                f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-                f"📊 Зачислено: <b>{worker_total_usdt:.4f} USDT</b>\n\n"
-                f"✅ Заявка завершена!"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Пополнение номера</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n"
+                f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> Номер: <code>{transfer_phone}</code>\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Итог сделки:\n"
+                f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+                f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Зачислено: {worker_total_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Заявка завершена!"
             )
         else:
             client_text = (
-                f"⚡️ <b>#{order_id} · Карта под оплату</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"✅ Заявка завершена!\n"
-                f"💸 Списано: {total_usdt:.4f} USDT\n"
-                f"💼 Ваш баланс: {client_balance_new:.2f} USDT"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Итог сделки:\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Оплата подтверждена\n"
+                f"▸ <tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT\n"
+                f"▸ <tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Остаток баланса: {client_balance_new:.2f} USDT\n\n"
+                f"<tg-emoji emoji-id='5406926593698312391'>🎉</tg-emoji> Спасибо за использование Send$Paid!"
             )
             worker_text = (
                 f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Карта под оплату</b>\n\n"
@@ -250,7 +256,7 @@ def register_client(dp, bot):
         if call.data == "client_become_worker":
             await bot.send_message(
                 chat_id,
-                "<b>📝 Заявка на роль исполнителя</b>\n"
+                "<tg-emoji emoji-id='5197269100878907942'>📝</tg-emoji> <b>Заявка на роль исполнителя</b>\n"
                 "<blockquote>Заполните короткую анкету, чтобы мы могли рассмотреть вас на роль оплатчика.\n"
                 "Все ответы отправятся одной заявкой на рассмотрение администрации после финальной проверки.</blockquote>\n"
                 "Что важно:\n• можно вернуться к предыдущему вопросу;\n"
@@ -279,9 +285,9 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
             paid_count = row["count"] if row else 0
             text = (
-                f"<b>👤 Личный профиль</b>\n<blockquote>{username} [{uid}]</blockquote>\n\n"
-                f"<b>💼 Финансы</b>\n• Баланс: <b>{balance:.2f} USDT</b>\n• Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
-                f"<b>📊 Статистика</b>\n• Закрыто заявок: {closed} шт\n• Активных заявок: {active} шт\n• Успешных пополнений: {paid_count} шт"
+                f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Личный профиль</b>\n<blockquote>{username} [{uid}]</blockquote>\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> <b>Финансы</b>\n• Баланс: <b>{balance:.2f} USDT</b>\n• Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика</b>\n• Закрыто заявок: {closed} шт\n• Активных заявок: {active} шт\n• Успешных пополнений: {paid_count} шт"
             )
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="client_ref")],
@@ -311,12 +317,12 @@ def register_client(dp, bot):
                 card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{card['id']}")])
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
-            await bot.send_message(chat_id, f"💳 Управление картами\n\nВыберите карту или добавьте новую.\n\n💼 Сохранено карт: {len(cards)}", reply_markup=InlineKeyboardMarkup(inline_keyboard=card_buttons))
+            await bot.send_message(chat_id, f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Управление картами\n\nВыберите карту или добавьте новую.\n\n<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Сохранено карт: {len(cards)}", reply_markup=InlineKeyboardMarkup(inline_keyboard=card_buttons))
             return await call.answer()
 
         if call.data == "cards_add":
             await state.set_state(WorkerRegStates.waiting_for_card_data)
-            await bot.send_message(chat_id, "➕ Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
+            await bot.send_message(chat_id, f"<tg-emoji emoji-id='5397916757333654639'>➕</tg-emoji> Добавление карты\n\nОтправьте данные карты в любом удобном виде.\nБот сам найдет номер, срок и CVV.")
             return await call.answer()
 
         if call.data == "lk_home":
@@ -327,11 +333,11 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
             active_count = row["count"] if row else 0
             text = (
-                f"🛠 <b>Профиль работника</b>\n"
+                f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Профиль работника</b>\n"
                 f"Аккаунт: {username}\n\n"
-                f"💼 <b>Финансы</b>\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> <b>Финансы</b>\n"
                 f"• Доступно: <b>{balance:.2f} USDT</b>\n\n"
-                f"📊 <b>Статистика</b>\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика</b>\n"
                 f"• Выполнено: {done_count} шт\n"
                 f"• В работе: {active_count} шт"
             )
@@ -354,7 +360,7 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="◀️ К списку карт", callback_data="lk_cards")],
                 [InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")]
             ])
-            await bot.send_message(chat_id, f"💳 Карточка карты\n\n💳 Номер: {row['card_number']}\n📅 Срок: {row['expiry']}\n🔐 Код: {row['cvv']}\n🏦 Банк: {row['bank']}\n🕒 Добавлена: {row['created_at']}", reply_markup=keyboard)
+            await bot.send_message(chat_id, f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Карточка карты\n\n<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Номер: {row['card_number']}\n<tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> Срок: {row['expiry']}\n<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Код: {row['cvv']}\n<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> Банк: {row['bank']}\n<tg-emoji emoji-id='5276412364458059956'>🕒</tg-emoji> Добавлена: {row['created_at']}", reply_markup=keyboard)
             return await call.answer()
 
         if call.data.startswith("card_delete_"):
@@ -368,7 +374,7 @@ def register_client(dp, bot):
                 card_buttons.append([InlineKeyboardButton(text=f"💳 {masked}", callback_data=f"card_view_{card['id']}")])
             card_buttons.append([InlineKeyboardButton(text="➕ Добавить карту", callback_data="cards_add")])
             card_buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
-            await bot.send_message(chat_id, f"💳 Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=InlineKeyboardMarkup(inline_keyboard=card_buttons))
+            await bot.send_message(chat_id, f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Управление картами\n\nСохранено карт: {len(cards)}", reply_markup=InlineKeyboardMarkup(inline_keyboard=card_buttons))
             return await call.answer()
 
         if call.data == "lk_active":
@@ -376,7 +382,7 @@ def register_client(dp, bot):
                 "SELECT id, amount, total_usdt, transfer_type FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS' ORDER BY id DESC", uid
             )
             if not orders:
-                await bot.send_message(chat_id, "🟢 Активных заявок нет", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                await bot.send_message(chat_id, f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> Активных заявок нет", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
                 ]))
                 return await call.answer()
@@ -392,12 +398,12 @@ def register_client(dp, bot):
                 else:
                     label = "💳 Карта под оплату"
                 buttons.append([InlineKeyboardButton(
-                    text=f"🟢 {label} #{order['id']} — {float(order['amount']):.0f} RUB",
+                    text=f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> {label} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"active_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             await bot.send_message(
-                chat_id, "🟢 <b>Активные заявки</b>\n\nВыберите заявку для управления:",
+                chat_id, f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> <b>Активные заявки</b>\n\nВыберите заявку для управления:",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
             return await call.answer()
@@ -405,7 +411,7 @@ def register_client(dp, bot):
         if call.data.startswith("active_order_"):
             order_id = int(call.data.split("_")[2])
             await bot.send_message(
-                chat_id, "📄 Открываю заявку...",
+                chat_id,f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
                 ])
@@ -441,7 +447,7 @@ def register_client(dp, bot):
                 filter_kb.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
                 await bot.send_photo(
                     chat_id, photo=PROFILE_BANNER_FILE_ID,
-                    caption="<b>📚 История воркера</b>\n\n<blockquote>Заявок не найдено.</blockquote>",
+                    caption=f"<tg-emoji emoji-id='5361741454685256344'>📚</tg-emoji> <b>История воркера</b>\n\n<blockquote>Заявок не найдено.</blockquote>",
                     parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=filter_kb)
                 )
                 return await call.answer()
@@ -449,10 +455,10 @@ def register_client(dp, bot):
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 status = order["status"]
-                if status == "DONE": icon = "✅"
-                elif status == "IN_PROGRESS": icon = "🟢"
-                elif status == "CANCELLED": icon = "❌"
-                else: icon = "🟡"
+                if status == "DONE": icon = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji>"
+                elif status == "IN_PROGRESS": icon = "<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji>"
+                elif status == "CANCELLED": icon = "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji>"
+                else: icon = "<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji>"
                 buttons.append([InlineKeyboardButton(
                     text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"worker_history_order_{order['id']}"
@@ -468,7 +474,7 @@ def register_client(dp, bot):
             buttons.append([InlineKeyboardButton(text="🏠 В кабинет", callback_data="lk_home")])
             await bot.send_photo(
                 chat_id, photo=PROFILE_BANNER_FILE_ID,
-                caption="<b>📚 История воркера</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
+                caption=f"<tg-emoji emoji-id='5361741454685256344'>📚</tg-emoji> <b>История воркера</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
             return await call.answer()
@@ -482,22 +488,22 @@ def register_client(dp, bot):
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
             if row["status"] == "IN_PROGRESS":
-                await bot.send_message(chat_id, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                await bot.send_message(chat_id, f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
                 ]))
                 return await call.answer()
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
             type_label = get_type_label(row["transfer_type"])
-            if row["status"] == "DONE": status_text = "✅ Завершена"
-            elif row["status"] == "CANCELLED": status_text = "❌ Отменена"
-            else: status_text = "🟡 Новая"
+            if row["status"] == "DONE": status_text = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Завершена"
+            elif row["status"] == "CANCELLED": status_text = "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Отменена"
+            else: status_text = "<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji> Новая"
             keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="lk_history")]])
             await bot.send_message(
                 chat_id,
-                f"⚡️ <b>#{row['id']} · {type_label}</b>\n\n"
-                f"💰 {float(row['amount']):.2f} RUB\n"
-                f"💎 Зачислено: {total_usdt:.4f} USDT\n"
-                f"📊 Статус: {status_text}",
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{row['id']} · {type_label}</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {float(row['amount']):.2f} RUB\n"
+                f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Зачислено: {total_usdt:.4f} USDT\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> Статус: {status_text}",
                 parse_mode="HTML", reply_markup=keyboard
             )
             return await call.answer()
@@ -531,7 +537,7 @@ def register_client(dp, bot):
                 filter_kb.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
                 await bot.send_photo(
                     chat_id, photo=PROFILE_BANNER_FILE_ID,
-                    caption="<b>📚 История клиента</b>\n\n<blockquote>Заявок не найдено.</blockquote>",
+                    caption=f"<tg-emoji emoji-id='5361741454685256344'>📚</tg-emoji> <b>История клиента</b>\n\n<blockquote>Заявок не найдено.</blockquote>",
                     parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=filter_kb)
                 )
                 return await call.answer()
@@ -539,10 +545,10 @@ def register_client(dp, bot):
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 status = order["status"]
-                if status == "DONE": icon = "✅"
-                elif status == "IN_PROGRESS": icon = "🟢"
-                elif status == "CANCELLED": icon = "❌"
-                else: icon = "🟡"
+                if status == "DONE": icon = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji>"
+                elif status == "IN_PROGRESS": icon = "<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji>"
+                elif status == "CANCELLED": icon = "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji>"
+                else: icon = "<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji>"
                 buttons.append([InlineKeyboardButton(
                     text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"history_order_{order['id']}"
@@ -558,12 +564,12 @@ def register_client(dp, bot):
             buttons.append([InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")])
             await bot.send_photo(
                 chat_id, photo=PROFILE_BANNER_FILE_ID,
-                caption="<b>📚 История клиента</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
+                caption=f"<tg-emoji emoji-id='5361741454685256344'>📚</tg-emoji> <b>История клиента</b>\n\n<blockquote>Выберите запись из истории, чтобы открыть подробную карточку.</blockquote>",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
             return await call.answer()
 
-        if call.data.startswith("history_order_"):
+            if call.data.startswith("history_order_"):
             order_id = int(call.data.split("_")[2])
             row = await db.db_fetchone(
                 "SELECT id, amount, total_usdt, status, transfer_type FROM orders WHERE id=$1 AND user_id=$2",
@@ -572,26 +578,26 @@ def register_client(dp, bot):
             if not row:
                 return await call.answer("❌ Заявка не найдена", show_alert=True)
             if row["status"] in ("IN_PROGRESS", "DISPUTE"):
-                await bot.send_message(chat_id, "📄 Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                await bot.send_message(chat_id, f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_client_order_{order_id}")]
                 ]))
                 return await call.answer()
             total_usdt = float(row["total_usdt"]) if row["total_usdt"] else 0
             status = row["status"]
             type_label = get_type_label(row["transfer_type"])
-            if status == "DONE": status_text = "✅ Завершена"
-            elif status == "CANCELLED": status_text = "❌ Отменена"
-            elif status == "NEW": status_text = "🟡 Новая"
+            if status == "DONE": status_text = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Завершена"
+            elif status == "CANCELLED": status_text = "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Отменена"
+            elif status == "NEW": status_text = "<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji> Новая"
             else: status_text = status
             buttons = [[InlineKeyboardButton(text="◀️ Назад", callback_data="client_history")]]
             if status == "NEW":
                 buttons.insert(0, [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{row['id']}")])
             await bot.send_message(
                 chat_id,
-                f"⚡️ <b>#{row['id']} · {type_label}</b>\n\n"
-                f"💰 {float(row['amount']):.2f} RUB\n"
-                f"💸 Списано: {total_usdt:.4f} USDT\n"
-                f"📊 Статус: {status_text}",
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{row['id']} · {type_label}</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {float(row['amount']):.2f} RUB\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Списано: {total_usdt:.4f} USDT\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> Статус: {status_text}",
                 parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
             )
             return await call.answer()
