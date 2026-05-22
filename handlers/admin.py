@@ -405,7 +405,7 @@ def register_admin(dp, bot: Bot):
         try:
             await call.message.delete()
         except: pass
-        await call.message.answer(ff"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор #{order_id} — средства возвращены клиенту.")
+        await call.message.answer(f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор #{order_id} — средства возвращены клиенту.")
         await call.answer("✅ Готово!", show_alert=True)
 
     @dp.callback_query(F.data.startswith("dispute_pay_worker_"))
@@ -420,7 +420,7 @@ def register_admin(dp, bot: Bot):
             await bot.send_message(row['worker_id'], f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Спор по заявке #{order_id} решён в вашу пользу. Средства зачислены.")
         except: pass
         try:
-            await bot.send_message(row['user_id'], f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Спор по заявке #{order_id} решён не в вашу пользу.)
+            await bot.send_message(row['user_id'], f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Спор по заявке #{order_id} решён не в вашу пользу.")
         except: pass
         try:
             await call.message.delete()
