@@ -18,6 +18,7 @@ class AdminStates(StatesGroup):
     waiting_for_worker_id = State()
     waiting_for_balance_uid = State()
     waiting_for_balance_amount = State()
+    waiting_for_contest_target = State()
 
 def register_admin(dp, bot: Bot):
 
@@ -36,6 +37,7 @@ def register_admin(dp, bot: Bot):
                 InlineKeyboardButton(text="👤 Все юзеры", callback_data="adm_list_users")
             ],
             [InlineKeyboardButton(text="🆘 Активные споры", callback_data="adm_disputes")],
+            [InlineKeyboardButton(text="📊 Общий оборот конкурса", callback_data="adm_contest")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="adm_close")]
         ])
         text = f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Панель управления проектом</b>"
@@ -209,11 +211,10 @@ def register_admin(dp, bot: Bot):
             await call.message.answer(f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> Заявка от: <code>{app['user_id']}</code>", reply_markup=kb, parse_mode="HTML")
         await call.answer()
 
-    # Хендлер для кнопок из apply.py и adm_view_apps
     @dp.callback_query(F.data.startswith("adm_ap_"))
     async def process_apply_decision(call: types.CallbackQuery):
         parts = call.data.split("_")
-        action = parts[2]  # yes / no
+        action = parts[2]
         t_id = int(parts[3])
         if action == "yes":
             await db.db_execute("INSERT INTO workers (user_id) VALUES ($1) ON CONFLICT DO NOTHING", t_id)
@@ -257,7 +258,7 @@ def register_admin(dp, bot: Bot):
         query = "SELECT user_id FROM balances UNION SELECT user_id FROM workers UNION SELECT user_id FROM invoices"
         rows = await db.db_fetchall(query)
         u_ids = list(set([r['user_id'] for r in rows]))
-        status_msg = await message.answer(f"<tg-emoji emoji-id='5188481279963715781'>🚀</tg-emoji> Рассылка на {len(u_ids)} чел...",)
+        status_msg = await message.answer(f"<tg-emoji emoji-id='5188481279963715781'>🚀</tg-emoji> Рассылка на {len(u_ids)} чел...")
         sent = 0
         for uid in u_ids:
             try:
@@ -310,7 +311,7 @@ def register_admin(dp, bot: Bot):
     @dp.callback_query(F.data.startswith("adm_bal_add_") | F.data.startswith("adm_bal_sub_"))
     async def bal_change_start(call: types.CallbackQuery, state: FSMContext):
         parts = call.data.split("_")
-        action = parts[2]  # add / sub
+        action = parts[2]
         t_id = int(parts[3])
         await state.set_state(AdminStates.waiting_for_balance_amount)
         await state.update_data(bal_action=action, bal_uid=t_id)
@@ -438,7 +439,7 @@ def register_admin(dp, bot: Bot):
         buttons = []
         for d in disputes:
             buttons.append([InlineKeyboardButton(
-                text=f"<tg-emoji emoji-id='5420323339723881652'>🆘</tg-emoji> #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
+                text=f"🆘 #{d['id']} — {float(d['amount']):.0f} RUB | К: {d['user_id']} В: {d['worker_id']}",
                 callback_data=f"adm_dispute_info_{d['id']}"
             )])
         buttons.append([InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")])
@@ -471,6 +472,80 @@ def register_admin(dp, bot: Bot):
         ])
         await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
         await call.answer()
+
+    @dp.callback_query(F.data == "adm_contest")
+    async def contest_menu(call: types.CallbackQuery):
+        row = await db.db_fetchone("SELECT * FROM contest WHERE status='active' ORDER BY id DESC LIMIT 1")
+        if row:
+            turnover = await db.db_fetchone(
+                "SELECT SUM(amount) as total FROM orders WHERE status IN ('DONE','SUCCESS','COMPLETED') AND created_at >= $1",
+                row['started_at']
+            )
+            current = float(turnover['total'] or 0)
+            target = float(row['target_rub'])
+            progress = min(current / target * 100, 100) if target > 0 else 0
+            bar_filled = int(progress / 10)
+            bar = "🟩" * bar_filled + "⬜" * (10 - bar_filled)
+            text = (
+                f"📊 <b>Конкурс активен</b>\n\n"
+                f"🗓 Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
+                f"🎯 Цель: <b>{target:,.0f} RUB</b>\n\n"
+                f"💰 Текущий оборот: <b>{current:,.0f} RUB</b>\n"
+                f"📈 Прогресс: <b>{progress:.1f}%</b>\n"
+                f"{bar}"
+            )
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🛑 Остановить конкурс", callback_data="adm_contest_stop")],
+                [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
+            ])
+        else:
+            text = "📊 <b>Конкурс</b>\n\nАктивных конкурсов нет."
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🚀 Запустить конкурс", callback_data="adm_contest_start")],
+                [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
+            ])
+        await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await call.answer()
+
+    @dp.callback_query(F.data == "adm_contest_stop")
+    async def contest_stop(call: types.CallbackQuery):
+        await db.db_execute("UPDATE contest SET status='finished' WHERE status='active'")
+        await call.message.edit_text(
+            "🛑 <b>Конкурс остановлен.</b>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_contest")]
+            ])
+        )
+        await call.answer()
+
+    @dp.callback_query(F.data == "adm_contest_start")
+    async def contest_start_prompt(call: types.CallbackQuery, state: FSMContext):
+        await state.set_state(AdminStates.waiting_for_contest_target)
+        await call.message.edit_text(
+            "🎯 Введите целевой оборот конкурса в RUB (число):",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Отмена", callback_data="adm_contest")]
+            ])
+        )
+        await call.answer()
+
+    @dp.message(AdminStates.waiting_for_contest_target)
+    async def contest_start_finish(message: types.Message, state: FSMContext):
+        try:
+            target = float(message.text.strip().replace(",", "").replace(" ", ""))
+            if target <= 0: raise ValueError
+        except:
+            return await message.answer("❌ Введите корректную сумму (например: 1000000)")
+        await db.db_execute(
+            "INSERT INTO contest (target_rub, status) VALUES ($1, 'active')", target
+        )
+        await state.clear()
+        await message.answer(
+            f"✅ Конкурс запущен! Цель: <b>{target:,.0f} RUB</b>",
+            parse_mode="HTML"
+        )
+        await send_admin_menu(message)
 
     @dp.callback_query(F.data == "adm_close")
     async def close_admin(call: types.CallbackQuery):
