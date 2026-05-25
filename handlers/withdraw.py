@@ -24,8 +24,8 @@ def register_withdraw(dp, bot):
         except:
             pass
         await call.message.answer(
-            f"💸 <b>Вывод средств</b>\n\n"
-            f"💰 Доступно: <b>{balance:.2f} USDT</b>\n\n"
+            f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> <b>Вывод средств</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Доступно: <b>{balance:.2f} USDT</b>\n\n"
             f"Введите сумму для вывода (минимум 1 USDT):",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -41,9 +41,9 @@ def register_withdraw(dp, bot):
         try:
             amount = float(message.text.strip().replace(",", "."))
             if amount < 1:
-                return await message.answer("❌ Минимальная сумма вывода — 1 USDT")
+                return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Минимальная сумма вывода — 1 USDT")
         except ValueError:
-            return await message.answer("❌ Введите число, например 10.5")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите число, например 10.5")
 
         res = await db.db_execute(
             "UPDATE balances SET balance = balance - $1 WHERE user_id=$2 AND balance >= $1",
@@ -52,11 +52,12 @@ def register_withdraw(dp, bot):
         if not res or "UPDATE 1" not in res:
             current_balance = await db.get_balance(uid)
             return await message.answer(
-                f"❌ Недостаточно средств!\n\n"
-                f"💰 Доступно: {current_balance:.2f} USDT"
+                f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Недостаточно средств!\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Доступно: {current_balance:.2f} USDT"
             )
 
-        check = await crypto_create_check(amount)
+        payout = round(amount * 0.97, 4)
+        check = await crypto_create_check(payout)
         if not check:
             await db.db_execute(
                 "UPDATE balances SET balance = balance + $1 WHERE user_id=$2",
@@ -65,7 +66,7 @@ def register_withdraw(dp, bot):
             await state.clear()
             from utils.crypto import crypto_create_check_debug
             error_info = await crypto_create_check_debug(amount)
-            return await message.answer(f"❌ Ошибка создания чека:\n<code>{error_info}</code>", parse_mode="HTML")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Ошибка создания чека:\n<code>{error_info}</code>", parse_mode="HTML")
 
         await db.db_execute(
             "INSERT INTO withdrawals (worker_id, amount) VALUES ($1, $2)",
@@ -74,8 +75,9 @@ def register_withdraw(dp, bot):
         check_url = check.get("bot_check_url") or check.get("check_url", "")
         await state.clear()
         await message.answer(
-            f"✅ Чек создан!\n\n"
-            f"💸 Сумма: {amount:.2f} USDT\n\n"
+           f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Чек создан!\n\n"
+            f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Запрошено: {amount:.4f} USDT\n"
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> К получению: {payout:.4f} USDT (за вычетом 3% комиссии)\n\n"
             f"Активируйте чек по ссылке ниже:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💰 Получить USDT", url=check_url)],
@@ -94,8 +96,8 @@ def register_withdraw(dp, bot):
         except:
             pass
         await call.message.answer(
-            f"💸 <b>Вывод средств</b>\n\n"
-            f"💰 Доступно: <b>{balance:.2f} USDT</b>\n\n"
+            f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> <b>Вывод средств</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Доступно: <b>{balance:.2f} USDT</b>\n\n"
             f"Введите сумму для вывода (минимум 1 USDT):",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -111,9 +113,9 @@ def register_withdraw(dp, bot):
         try:
             amount = float(message.text.strip().replace(",", "."))
             if amount < 1:
-                return await message.answer("❌ Минимальная сумма вывода — 1 USDT")
+                return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Минимальная сумма вывода — 1 USDT")
         except ValueError:
-            return await message.answer("❌ Введите число, например 10.5")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите число, например 10.5")
 
         res = await db.db_execute(
             "UPDATE balances SET balance = balance - $1 WHERE user_id=$2 AND balance >= $1",
@@ -122,24 +124,26 @@ def register_withdraw(dp, bot):
         if not res or "UPDATE 1" not in res:
             current_balance = await db.get_balance(uid)
             return await message.answer(
-                f"❌ Недостаточно средств!\n\n"
-                f"💰 Доступно: {current_balance:.2f} USDT"
+                f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Недостаточно средств!\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Доступно: {current_balance:.2f} USDT"
             )
 
-        check = await crypto_create_check(amount)
+        payout = round(amount * 0.97, 4)
+        check = await crypto_create_check(payout)
         if not check:
             await db.db_execute(
                 "UPDATE balances SET balance = balance + $1 WHERE user_id=$2",
                 amount, uid
             )
             await state.clear()
-            return await message.answer("❌ Ошибка создания чека. Попробуйте позже.")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Ошибка создания чека. Попробуйте позже.")
 
         check_url = check.get("bot_check_url") or check.get("check_url", "")
         await state.clear()
         await message.answer(
-            f"✅ Чек создан!\n\n"
-            f"💸 Сумма: {amount:.2f} USDT\n\n"
+            f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Чек создан!\n\n"
+            f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Запрошено: {amount:.4f} USDT\n"
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> К получению: {payout:.4f} USDT (за вычетом 3% комиссии)\n\n"
             f"Активируйте чек по ссылке ниже:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="💰 Получить USDT", url=check_url)],
