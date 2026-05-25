@@ -36,7 +36,7 @@ def register_transfer(dp, bot):
         await call.message.answer_photo(
             photo=TRANSFER_SELECT_BANNER_FILE_ID,
             caption=(
-                "<b>🏦 Перевод на карту</b>\n\n"
+                f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Перевод на карту</b>\n\n"
                 "<blockquote>Выберите тип перевода. Исполнитель переведёт нужную сумму "
                 "на указанные реквизиты.</blockquote>\n\n"
                 "Выберите тип перевода:"
@@ -65,7 +65,7 @@ def register_transfer(dp, bot):
         msg = await call.message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>📲 Перевод по СБП</b>\n\n"
+                f"<tg-emoji emoji-id='5278304890257436355'>📲</tg-emoji> <b>Перевод по СБП</b>\n\n"
                 "<blockquote>Введите сумму перевода в рублях.</blockquote>\n\n"
                 "Пример: <b>1000</b>"
             ),
@@ -84,7 +84,7 @@ def register_transfer(dp, bot):
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            return await message.answer("❌ Введите корректную сумму, например <b>1000</b>", parse_mode="HTML")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректную сумму, например <b>1000</b>", parse_mode="HTML")
 
         data = await state.get_data()
         try:
@@ -101,7 +101,7 @@ def register_transfer(dp, bot):
         msg = await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>📱 Номер телефона</b>\n\n"
+                f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <b>Номер телефона</b>\n\n"
                 "<blockquote>Введите номер телефона получателя.</blockquote>\n\n"
                 "Пример: <b>+79001234567</b>"
             ),
@@ -130,7 +130,7 @@ def register_transfer(dp, bot):
         msg = await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>🏦 Банк получателя</b>\n\n"
+                f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Банк получателя</b>\n\n"
                 "<blockquote>Введите название банка получателя.</blockquote>\n\n"
                 "Пример: <b>Сбербанк</b>"
             ),
@@ -159,7 +159,7 @@ def register_transfer(dp, bot):
         msg = await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>👤 Имя получателя</b>\n\n"
+                f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Имя получателя</b>\n\n"
                 "<blockquote>Введите имя и отчество получателя.</blockquote>\n\n"
                 "Пример: <b>Иван Иванович</b>"
             ),
@@ -197,15 +197,15 @@ def register_transfer(dp, bot):
         await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                f"<b>📋 Подтверждение заявки</b>\n\n"
-                f"⚡️ Перевод по СБП\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"📋 Куда переводим:\n"
-                f"▸ 📱 <code>{phone}</code>\n"
-                f"▸ 🏦 {bank}\n"
-                f"▸ 👤 {name}\n\n"
-                f"💼 Комиссия: {commission:.2f} RUB\n"
-                f"💎 Итого: {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> <b>Подтверждение заявки</b>\n\n"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> Перевод по СБП\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
+                f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone}</code>\n"
+                f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Комиссия: {commission:.2f} RUB\n"
+                f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Итого: {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
                 f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>"
             ),
             parse_mode="HTML",
@@ -236,9 +236,9 @@ def register_transfer(dp, bot):
             except:
                 pass
             return await call.message.answer(
-                f"❌ Недостаточно средств на балансе!\n\n"
-                f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                f"💰 Ваш баланс: {balance:.2f} USDT",
+                f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Недостаточно средств на балансе!\n\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Ваш баланс: {balance:.2f} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
@@ -256,14 +256,14 @@ def register_transfer(dp, bot):
             pass
 
         client_msg = await call.message.answer(
-            f"⚡️ <b>#{order_id} · Перевод по СБП</b>\n\n"
-            f"💰 {amount:.2f} RUB\n\n"
-            f"📋 Куда переводим:\n"
-            f"▸ 📱 <code>{phone}</code>\n"
-            f"▸ 🏦 {bank}\n"
-            f"▸ 👤 {name}\n\n"
-            f"🟡 Новая · 👨‍💻 Исполнитель назначается\n\n"
-            f"⏳ Ожидайте — скоро свяжемся с вами",
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по СБП</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+            f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
+            f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone}</code>\n"
+            f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+            f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+            f"<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji> Новая · <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель назначается\n\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте — скоро свяжемся с вами",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
@@ -272,14 +272,14 @@ def register_transfer(dp, bot):
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", client_msg.message_id, order_id)
 
         text_order = (
-            f"📥 <b>Новая заявка #{order_id}</b>\n\n"
-            f"⚡️ Перевод по СБП\n\n"
-            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-            f"📱 <b>Телефон:</b> <code>{phone}</code>\n"
-            f"🏦 <b>Банк:</b> {bank}\n"
-            f"👤 <b>Получатель:</b> {name}\n\n"
-            f"🔐 <b>Резерв:</b> {total_usdt:.4f} USDT\n"
-            f"⏱ Время на принятие: 1500 сек"
+            f"<tg-emoji emoji-id='5443127283898405358'>📥</tg-emoji> <b>Новая заявка #{order_id}</b>\n\n"
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> Перевод по СБП\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> <b>Сумма:</b> {amount:.2f} RUB\n"
+            f"<tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <b>Телефон:</b> <code>{phone}</code>\n"
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Банк:</b> {bank}\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Получатель:</b> {name}\n\n"
+            f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> <b>Резерв:</b> {total_usdt:.4f} USDT\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>⏱</tg-emoji> Время на принятие: 1500 сек"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
@@ -300,7 +300,7 @@ def register_transfer(dp, bot):
         msg = await call.message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>💳 Перевод по номеру карты</b>\n\n"
+                f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Перевод по номеру карты</b>\n\n"
                 "<blockquote>Введите сумму перевода в рублях.</blockquote>\n\n"
                 "Пример: <b>1000</b>"
             ),
@@ -319,7 +319,7 @@ def register_transfer(dp, bot):
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            return await message.answer("❌ Введите корректную сумму, например <b>1000</b>", parse_mode="HTML")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректную сумму, например <b>1000</b>", parse_mode="HTML")
 
         data = await state.get_data()
         try:
@@ -336,7 +336,7 @@ def register_transfer(dp, bot):
         msg = await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>💳 Номер карты получателя</b>\n\n"
+                f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Номер карты получателя</b>\n\n"
                 "<blockquote>Введите номер карты получателя.</blockquote>\n\n"
                 "Пример: <b>4276 1234 5678 9012</b>"
             ),
@@ -365,7 +365,7 @@ def register_transfer(dp, bot):
         msg = await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>🏦 Банк получателя</b>\n\n"
+                f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Банк получателя</b>\n\n"
                 "<blockquote>Введите название банка получателя.</blockquote>\n\n"
                 "Пример: <b>Сбербанк</b>"
             ),
@@ -394,7 +394,7 @@ def register_transfer(dp, bot):
         msg = await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                "<b>👤 Имя получателя</b>\n\n"
+                f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Имя получателя</b>\n\n"
                 "<blockquote>Введите имя и отчество получателя.</blockquote>\n\n"
                 "Пример: <b>Иван Иванович</b>"
             ),
@@ -432,15 +432,15 @@ def register_transfer(dp, bot):
         await message.answer_photo(
             photo=TRANSFER_BANNER_FILE_ID,
             caption=(
-                f"<b>📋 Подтверждение заявки</b>\n\n"
-                f"⚡️ Перевод по номеру карты\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"📋 Куда переводим:\n"
-                f"▸ 💳 <code>{card_number}</code>\n"
-                f"▸ 🏦 {bank}\n"
-                f"▸ 👤 {name}\n\n"
-                f"💼 Комиссия: {commission:.2f} RUB\n"
-                f"💎 Итого: {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> <b>Подтверждение заявки</b>\n\n"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> Перевод по номеру карты\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
+                f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{card_number}</code>\n"
+                f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+                f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Комиссия: {commission:.2f} RUB\n"
+                f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Итого: {total:.2f} RUB (~{total_usdt:.4f} USDT)\n\n"
                 f"<blockquote>Нажмите «Подтвердить» для создания заявки.</blockquote>"
             ),
             parse_mode="HTML",
@@ -471,9 +471,9 @@ def register_transfer(dp, bot):
             except:
                 pass
             return await call.message.answer(
-                f"❌ Недостаточно средств на балансе!\n\n"
-                f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                f"💰 Ваш баланс: {balance:.2f} USDT",
+                f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Недостаточно средств на балансе!\n\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Ваш баланс: {balance:.2f} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
@@ -491,14 +491,14 @@ def register_transfer(dp, bot):
             pass
 
         client_msg = await call.message.answer(
-            f"⚡️ <b>#{order_id} · Перевод по номеру карты</b>\n\n"
-            f"💰 {amount:.2f} RUB\n\n"
-            f"📋 Куда переводим:\n"
-            f"▸ 💳 <code>{card_number}</code>\n"
-            f"▸ 🏦 {bank}\n"
-            f"▸ 👤 {name}\n\n"
-            f"🟡 Новая · 👨‍💻 Исполнитель назначается\n\n"
-            f"⏳ Ожидайте — скоро свяжемся с вами",
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · Перевод по номеру карты</b>\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+            f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Куда переводим:\n"
+            f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{card_number}</code>\n"
+            f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n"
+            f"▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
+            f"<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji> Новая · <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель назначается\n\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте — скоро свяжемся с вами",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")]
@@ -507,14 +507,14 @@ def register_transfer(dp, bot):
         await db.db_execute("UPDATE orders SET client_message_id=$1 WHERE id=$2", client_msg.message_id, order_id)
 
         text_order = (
-            f"📥 <b>Новая заявка #{order_id}</b>\n\n"
-            f"⚡️ Перевод по номеру карты\n\n"
-            f"💰 <b>Сумма:</b> {amount:.2f} RUB\n"
-            f"💳 <b>Номер карты:</b> <code>{card_number}</code>\n"
-            f"🏦 <b>Банк:</b> {bank}\n"
-            f"👤 <b>Получатель:</b> {name}\n\n"
-            f"🔐 <b>Резерв:</b> {total_usdt:.4f} USDT\n"
-            f"⏱ Время на принятие: 1500 сек"
+            f"<tg-emoji emoji-id='5443127283898405358'>📥</tg-emoji> <b>Новая заявка #{order_id}</b>\n\n"
+            f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> Перевод по номеру карты\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> <b>Сумма:</b> {amount:.2f} RUB\n"
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Номер карты:</b> <code>{card_number}</code>\n"
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> <b>Банк:</b> {bank}\n"
+            f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Получатель:</b> {name}\n\n"
+            f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> <b>Резерв:</b> {total_usdt:.4f} USDT\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>⏱</tg-emoji> Время на принятие: 1500 сек"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❤️ Взять в работу", callback_data=f"take_{order_id}")]
