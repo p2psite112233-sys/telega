@@ -98,7 +98,7 @@ def register_common(dp, bot: Bot):
             try:
                 await bot.send_message(
                     referrer_id,
-                    f"🎉 По вашей реферальной ссылке зарегистрировался {username}!"
+                    f"<tg-emoji emoji-id='5406926593698312391'>🎉</tg-emoji> По вашей реферальной ссылке зарегистрировался {username}!"
                 )
             except:
                 pass
@@ -127,7 +127,7 @@ def register_common(dp, bot: Bot):
                         pass
                 await message.answer_sticker(WELCOME_STICKER_ID)
                 await message.answer(
-                    "👋 Добро пожаловать в <b>Send$Paid</b>!\n\n"
+                    f"<tg-emoji emoji-id='5400362079783770689'>👋</tg-emoji> Добро пожаловать в <b>Send$Paid</b>!\n\n"
                     "Для использования бота необходимо подписаться на наш канал.",
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -148,13 +148,13 @@ def register_common(dp, bot: Bot):
 
         if role in ["worker", "admin"]:
             worker_text = (
-                "<b>🏠 Главное меню работника</b>\n\n"
+                f"<tg-emoji emoji-id='5298668674532538341'>🏠</tg-emoji> <b>Главное меню работника</b>\n\n"
                 "<blockquote>Здесь вы получаете заявки на выдачу карты, переводы на карту/СБП, "
                 "оплату QR-кодов или пополнение номеров.\n"
                 "Бот выступает гарантом и фиксирует все действия.</blockquote>\n\n"
-                "💸 Ваша доля от комиссии: <b>80.00%</b>\n"
-                "🧾 Доля сервиса от комиссии: <b>20.00%</b>\n"
-                "✅ Вы сами выбираете, какую заявку взять в работу"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Ваша доля от комиссии: <b>80.00%</b>\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>🧾</tg-emoji> Доля сервиса от комиссии: <b>20.00%</b>\n"
+                f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Вы сами выбираете, какую заявку взять в работу"
             )
             worker_kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📥 Доступные заявки", callback_data="lk_available")],
@@ -243,9 +243,9 @@ def register_common(dp, bot: Bot):
         except:
             pass
         await call.message.answer(
-            "💳 <b>Пополнение баланса</b>\n\n"
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Пополнение баланса</b>\n\n"
             "Введите сумму пополнения в рублях.\n\n"
-            "💸 Минимальная сумма: <b>100 RUB</b>",
+            f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Минимальная сумма: <b>100 RUB</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
@@ -258,9 +258,9 @@ def register_common(dp, bot: Bot):
         try:
             amount_rub = float(message.text.strip())
             if amount_rub < 100:
-                return await message.answer("❌ Минимальная сумма — 100 RUB")
+                return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Минимальная сумма — 100 RUB")
         except ValueError:
-            return await message.answer("❌ Введите число, например 1000")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите число, например 1000")
 
         await state.clear()
         rate = await crypto_get_rate()
@@ -270,7 +270,7 @@ def register_common(dp, bot: Bot):
 
         invoice = await crypto_create_invoice(amount_usdt, message.from_user.id)
         if not invoice:
-            return await message.answer("❌ Ошибка создания инвойса. Попробуйте позже.")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Ошибка создания инвойса. Попробуйте позже.")
 
         invoice_id = invoice["invoice_id"]
         pay_url = invoice["bot_invoice_url"]
@@ -284,11 +284,11 @@ def register_common(dp, bot: Bot):
             [InlineKeyboardButton(text="💰 Оплатить инвойс", url=pay_url)]
         ])
         await message.answer(
-            f"🧾 Счёт на пополнение #{invoice_id}\n\n"
-            f"💰 Сумма: {amount_rub:.2f} RUB (~{amount_usdt:.2f} USDT)\n"
+            f"<tg-emoji emoji-id='5444856076954520455'>🧾</tg-emoji> Счёт на пополнение #{invoice_id}\n\n"
+            f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Сумма: {amount_rub:.2f} RUB (~{amount_usdt:.2f} USDT)\n"
             f"Комиссия: {commission:.2f} USDT\n"
-            f"💎 К зачислению: {to_credit:.2f} USDT\n"
-            f"🕒 Проверка: каждые 10 сек в течение 15 минут",
+            f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> К зачислению: {to_credit:.2f} USDT\n"
+            f"<tg-emoji emoji-id='5276412364458059956'>🕒</tg-emoji> Проверка: каждые 10 сек в течение 15 минут",
             reply_markup=kb
         )
         asyncio.create_task(check_payment_loop(bot, message.from_user.id, invoice_id, to_credit))
@@ -336,7 +336,7 @@ def register_common(dp, bot: Bot):
                 f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <b>Карта под оплату</b>\n\n"
                 f"<blockquote>Введите сумму в RUB, на которую нужна карта.\n"
                 f"После подтверждения исполнитель отправит реквизиты для оплаты.</blockquote>\n\n"
-                f"💸 Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Сумма заявки: в рублях{extra}\nПример: <b>500</b>"
             ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -353,7 +353,7 @@ def register_common(dp, bot: Bot):
             if rub <= 0:
                 raise ValueError
         except ValueError:
-            return await message.answer("❌ Введите корректную сумму, например 500")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Введите корректную сумму, например 500")
 
         uid = message.from_user.id
         data = await state.get_data()
@@ -379,7 +379,7 @@ def register_common(dp, bot: Bot):
 
         rate = await crypto_get_rate()
         if not rate:
-            return await message.answer("❌ Ошибка получения курса. Попробуйте позже.")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Ошибка получения курса. Попробуйте позже.")
 
         total_usdt = round(total / rate, 4)
         amount_usdt = round(rub / rate, 4)
@@ -388,9 +388,9 @@ def register_common(dp, bot: Bot):
         if order_id == 0:
             balance = await db.get_balance(uid)
             return await message.answer(
-                f"❌ Недостаточно средств на балансе!\n\n"
-                f"💸 Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
-                f"💰 Ваш баланс: {balance:.2f} USDT",
+                f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Недостаточно средств на балансе!\n\n"
+                f"<tg-emoji emoji-id='5201691993775818138'>💸</tg-emoji> Необходимо: {total_usdt:.4f} USDT ({total:.2f} RUB)\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Ваш баланс: {balance:.2f} USDT",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
@@ -430,15 +430,15 @@ def register_common(dp, bot: Bot):
     async def process_card_data(message: types.Message, state: FSMContext):
         card = parse_card(message.text)
         if not card:
-            return await message.answer("❌ Не удалось найти номер карты. Попробуйте ещё раз.")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Не удалось найти номер карты. Попробуйте ещё раз.")
         await state.update_data(card=card)
         await state.set_state(WorkerRegStates.waiting_for_bank_name)
         await message.answer(
-            f"✅ Карта распознана:\n\n"
-            f"💳 Номер: {card['number']}\n"
-            f"📅 Срок: {card['expiry']}\n"
-            f"🔐 CVV: {card['cvv']}\n\n"
-            f"🏦 Введите название банка:"
+            f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Карта распознана:\n\n"
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Номер: {card['number']}\n"
+            f"<tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> Срок: {card['expiry']}\n"
+            f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> CVV: {card['cvv']}\n\n"
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> Введите название банка:"
         )
 
     @dp.message(WorkerRegStates.waiting_for_bank_name)
@@ -461,11 +461,11 @@ def register_common(dp, bot: Bot):
             [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
         ])
         await message.answer(
-            f"✅ Карта сохранена!\n\n"
-            f"💳 {card['number']}\n"
-            f"🏦 Банк: {bank}\n"
-            f"📅 Срок: {card['expiry']}\n\n"
-            f"💼 Всего карт: {card_count}",
+            f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Карта сохранена!\n\n"
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> {card['number']}\n"
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> Банк: {bank}\n"
+            f"<tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> Срок: {card['expiry']}\n\n"
+            f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Всего карт: {card_count}",
             reply_markup=keyboard
         )
 
@@ -505,7 +505,7 @@ async def cleanup_expired_orders(bot: Bot):
                         await bot.edit_message_text(
                             chat_id=b["worker_id"],
                             message_id=b["message_id"],
-                            text=f"❌ Заявка #{order['id']} — срок истёк\n\nКлиент не дождался исполнителя."
+                            text=f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Заявка #{order['id']} — срок истёк\n\nКлиент не дождался исполнителя."
                         )
                         await asyncio.sleep(0.05)
                     except:
@@ -516,11 +516,11 @@ async def cleanup_expired_orders(bot: Bot):
                         await bot.edit_message_text(
                             chat_id=order["user_id"],
                             message_id=order["client_message_id"],
-                            text=f"⏰ Заявка #{order['id']} отменена\n\nНикто не взял заявку в течение 25 минут.\n💰 Средства возвращены на баланс."
+                            text=f"<tg-emoji emoji-id='5440621591387980068'>⏰</tg-emoji> Заявка #{order['id']} отменена\n\nНикто не взял заявку в течение 25 минут.\n<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Средства возвращены на баланс."
                         )
                 except:
                     try:
-                        await bot.send_message(order["user_id"], f"⏰ Заявка #{order['id']} отменена.\n💰 Средства возвращены на баланс.")
+                        await bot.send_message(order["user_id"], f"<tg-emoji emoji-id='5440621591387980068'>⏰</tg-emoji> Заявка #{order['id']} отменена.\n<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Средства возвращены на баланс.")
                     except:
                         pass
         except Exception as e:
@@ -553,16 +553,16 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
                             await db.add_balance(ref_row["referrer_id"], bonus)
                             await bot.send_message(
                                 ref_row["referrer_id"],
-                                f"🎁 Реферальный бонус!\n\nВаш реферал пополнил баланс.\n💎 Начислено: +{bonus:.4f} USDT"
+                                f"<tg-emoji emoji-id='5231005931550030290'>🎁</tg-emoji> Реферальный бонус!\n\nВаш реферал пополнил баланс.\n<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Начислено: +{bonus:.4f} USDT"
                             )
                 except Exception as e:
                     logger.error(f"[referral bonus] error: {e}")
                 try:
                     await bot.send_message(
                         user_id,
-                        f"✅ Баланс пополнен!\n\n"
-                        f"💎 Зачислено: {to_credit:.2f} USDT\n"
-                        f"💰 Текущий баланс: {balance:.2f} USDT"
+                        f"<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Баланс пополнен!\n\n"
+                        f"<tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> Зачислено: {to_credit:.2f} USDT\n"
+                        f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> Текущий баланс: {balance:.2f} USDT"
                     )
                 except Exception as e:
                     logger.error(f"[payment_loop] notify error: {e}")
@@ -571,7 +571,7 @@ async def check_payment_loop(bot: Bot, user_id: int, invoice_id: int, to_credit:
         if status == "expired":
             await db.db_execute("UPDATE invoices SET status='expired' WHERE invoice_id=$1", invoice_id)
             try:
-                await bot.send_message(user_id, f"❌ Инвойс #{invoice_id} истёк. Создайте новый.")
+                await bot.send_message(user_id, f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Инвойс #{invoice_id} истёк. Создайте новый.")
             except:
                 pass
             return
