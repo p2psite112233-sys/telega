@@ -398,7 +398,7 @@ def register_client(dp, bot):
                 else:
                     label = "💳 Карта под оплату"
                 buttons.append([InlineKeyboardButton(
-                    text=f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> {label} #{order['id']} — {float(order['amount']):.0f} RUB",
+                    text=f"🟢 {label} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"active_order_{order['id']}"
                 )])
             buttons.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
@@ -455,10 +455,10 @@ def register_client(dp, bot):
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 status = order["status"]
-                if status == "DONE": icon = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji>"
-                elif status == "IN_PROGRESS": icon = "<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji>"
-                elif status == "CANCELLED": icon = "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji>"
-                else: icon = "<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji>"
+                if status == "DONE": icon = "✅"
+                elif status == "IN_PROGRESS": icon = "🟢"
+                elif status == "CANCELLED": icon = "❌"
+                else: icon = "🟡"
                 buttons.append([InlineKeyboardButton(
                     text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"worker_history_order_{order['id']}"
@@ -545,10 +545,10 @@ def register_client(dp, bot):
             for order in orders:
                 total_usdt = float(order["total_usdt"]) if order["total_usdt"] else 0
                 status = order["status"]
-                if status == "DONE": icon = "<tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji>"
-                elif status == "IN_PROGRESS": icon = "<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji>"
-                elif status == "CANCELLED": icon = "<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji>"
-                else: icon = "<tg-emoji emoji-id='5278753302023004775'>🟡</tg-emoji>"
+                if status == "DONE": icon = "✅"
+                elif status == "IN_PROGRESS": icon = "🟢"
+                elif status == "CANCELLED": icon = "❌"
+                else: icon = "🟡"
                 buttons.append([InlineKeyboardButton(
                     text=f"{icon} #{order['id']} — {float(order['amount']):.0f} RUB",
                     callback_data=f"history_order_{order['id']}"
