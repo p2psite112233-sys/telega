@@ -44,25 +44,26 @@ def order_info_transfer(order_id: int, amount: float, total_usdt: float, transfe
 
     if transfer_type == "sbp":
         type_label = "Перевод по СБП"
-        req = f"▸ 📱 <code>{phone_or_card}</code>"
-        extra = f"▸ 🏦 {bank}\n▸ 👤 {name}\n"
+        req = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>"
+        extra = f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n"
     elif transfer_type == "card":
         type_label = "Перевод по номеру карты"
-        req = f"▸ 💳 <code>{phone_or_card}</code>"
-        extra = f"▸ 🏦 {bank}\n▸ 👤 {name}\n"
+        req = f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{phone_or_card}</code>"
+        extra = f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n"
     else:  # phone
         type_label = "Пополнение номера"
-        req = f"▸ 📱 <code>{phone_or_card}</code>"
+        req = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>"
         extra = ""
-
     return (
-        f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-        f"💰 {amount:.2f} RUB\n\n"
-        f"📋 Реквизиты:\n"
+        f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+        f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+        f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты:\n"
         f"{req}\n"
         f"{extra}\n"
-        f"💵 Ваш заработок: +{commission * 0.8:.2f} RUB (+{worker_net_usdt:.4f} USDT)\n"
-        f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+        f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Детали сделки:\n"
+        f"▸ <tg-emoji emoji-id='5201691993775818138'>💵</tg-emoji> Ваш заработок: +{commission * 0.8:.2f} RUB\n"
+        f"▸ <tg-emoji emoji-id='5276229330131772747'>💎</tg-emoji> В USDT: +{worker_net_usdt:.4f} USDT\n"
+        f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> К зачислению: {worker_total_usdt:.4f} USDT"
     )
 
 def register_worker(dp, bot):
@@ -80,12 +81,12 @@ def register_worker(dp, bot):
             c_active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE user_id=$1 AND status='IN_PROGRESS'", uid)
             paid_count = await db.db_fetchone("SELECT COUNT(*) FROM invoices WHERE user_id=$1 AND status='paid'", uid)
             text = (
-                f"<b>👤 Личный профиль</b>\n"
+                f"<tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> <b>Личный профиль</b>\n"
                 f"<blockquote>{username}</blockquote>\n\n"
-                f"<b>💼 Финансы</b>\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> <b>Финансы</b>\n"
                 f"• Баланс: <b>{balance:.2f} USDT</b>\n"
                 f"• Заморожено: <b>{frozen:.2f} USDT</b>\n\n"
-                f"<b>📊 Статистика</b>\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика</b>\n"
                 f"• Закрыто: {c_done['count']} шт\n"
                 f"• Активно: {c_active['count']} шт\n"
                 f"• Пополнений: {paid_count['count']} шт"
@@ -100,11 +101,11 @@ def register_worker(dp, bot):
         w_done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
         w_active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
         text = (
-            f"🛠 <b>Профиль работника</b>\n"
+            f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Профиль работника</b>\n"
             f"Аккаунт: {username}\n\n"
-            f"💼 <b>Финансы</b>\n"
+            f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> <b>Финансы</b>\n"
             f"• Доступно: <b>{balance:.2f} USDT</b>\n\n"
-            f"📊 <b>Статистика</b>\n"
+            f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика</b>\n"
             f"• Выполнено: {w_done['count']} шт\n"
             f"• В работе: {w_active['count']} шт"
         )
@@ -128,7 +129,7 @@ def register_worker(dp, bot):
 
         if not orders:
             await call.message.answer(
-                "📭 <b>Активных заявок пока нет</b>\n\nОжидайте новых!",
+                f"<tg-emoji emoji-id='5282843764451195532'>📭</tg-emoji> <b>Активных заявок пока нет</b>\n\nОжидайте новых!",
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
@@ -156,7 +157,7 @@ def register_worker(dp, bot):
         await call.message.answer_photo(
             photo=BANNER_FILE_ID,
             caption=(
-                "<b>📥 Доступные заявки</b>\n\n"
+                f"<tg-emoji emoji-id='5443127283898405358'>📥</tg-emoji> <b>Доступные заявки</b>\n\n"
                 "<blockquote>Здесь отображаются все активные заявки от клиентов, которые ещё не взяты в работу.\n"
                 "Нажмите на заявку, чтобы просмотреть детали и взять её.</blockquote>"
             ),
@@ -173,11 +174,11 @@ def register_worker(dp, bot):
         w_done = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='DONE'", uid)
         w_active = await db.db_fetchone("SELECT COUNT(*) FROM orders WHERE worker_id=$1 AND status='IN_PROGRESS'", uid)
         text = (
-            f"🛠 <b>Профиль работника</b>\n"
+            f"<tg-emoji emoji-id='5332724926216428039'>🛠</tg-emoji> <b>Профиль работника</b>\n"
             f"Аккаунт: {username}\n\n"
-            f"💼 <b>Финансы</b>\n"
+            f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> <b>Финансы</b>\n"
             f"• Доступно: <b>{balance:.2f} USDT</b>\n\n"
-            f"📊 <b>Статистика</b>\n"
+            f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Статистика</b>\n"
             f"• Выполнено: {w_done['count']} шт\n"
             f"• В работе: {w_active['count']} шт"
         )
@@ -218,7 +219,7 @@ def register_worker(dp, bot):
                 await bot.edit_message_text(
                     chat_id=b["worker_id"],
                     message_id=b["message_id"],
-                    text=f"⚙️ Заявка #{order_id} уже принята другим исполнителем."
+                    text=f"<tg-emoji emoji-id='5420323339723881652'>⚙️</tg-emoji> Заявка #{order_id} уже принята другим исполнителем."
                 )
                 await asyncio.sleep(0.05)
             except:
@@ -241,27 +242,27 @@ def register_worker(dp, bot):
 
             if transfer_type == "sbp":
                 type_label = "Перевод по СБП"
-                req_label = f"▸ 📱 <code>{phone_or_card}</code>"
-                req_extra = f"▸ 🏦 {bank}\n▸ 👤 {name}\n\n"
+                req_label = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>"
+                req_extra = f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
             elif transfer_type == "card":
                 type_label = "Перевод по номеру карты"
-                req_label = f"▸ 💳 <code>{phone_or_card}</code>"
-                req_extra = f"▸ 🏦 {bank}\n▸ 👤 {name}\n\n"
+                req_label = f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{phone_or_card}</code>"
+                req_extra = f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n\n"
             else:
                 type_label = "Пополнение номера"
-                req_label = f"▸ 📱 <code>{phone_or_card}</code>"
+                req_label = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>"
                 req_extra = "\n"
 
             new_msg = await bot.send_message(
                 chat_id=order["user_id"],
                 text=(
-                    f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"📋 Реквизиты:\n"
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты:\n"
                     f"{req_label}\n"
                     f"{req_extra}"
-                    f"🟢 В работе · 👨‍💻 Исполнитель принял заявку\n\n"
-                    f"⏳ Ожидайте"
+                    f"<tg-emoji emoji-id='5278611606756942667'>🟢</tg-emoji> В работе · <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель принял заявку\n\n"
+                    f"<tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидайте"
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -366,10 +367,12 @@ def register_worker(dp, bot):
                 chat_id=row["user_id"],
                 message_id=row["client_message_id"],
                 text=(
-                    f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-                    f"💰 {amount:.2f} RUB\n\n"
-                    f"✅ Исполнитель сообщает что выполнил.\n"
-                    f"Подтвердите получение или откройте спор."
+                    f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+                    f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                    f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
+                    f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Исполнитель завершил перевод\n"
+                    f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ожидает вашего подтверждения\n\n"
+                    f"<tg-emoji emoji-id='5276395476646653290'>💬</tg-emoji> Проверьте поступление средств и подтвердите получение, или откройте спор если перевод не пришёл."
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -398,10 +401,13 @@ def register_worker(dp, bot):
         worker_msg = await bot.send_message(
             chat_id=uid,
             text=(
-                f"⚡️ <b>#{order_id} · {type_label}</b>\n\n"
-                f"💰 {amount:.2f} RUB\n\n"
-                f"⏳ Ожидаем подтверждения от клиента\n\n"
-                f"📊 К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
+                f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id} · {type_label}</b>\n\n"
+                f"<tg-emoji emoji-id='5255806447106679302'>💰</tg-emoji> {amount:.2f} RUB\n\n"
+                f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Статус:\n"
+                f"▸ <tg-emoji emoji-id='5206476089127372379'>✅</tg-emoji> Вы сообщили о выполнении\n"
+                f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Ждём подтверждения от клиента\n\n"
+                f"<tg-emoji emoji-id='5445221832074483553'>💼</tg-emoji> Детали сделки:\n"
+                f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> К зачислению: <b>{worker_total_usdt:.4f} USDT</b>"
             ),
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -438,7 +444,7 @@ def register_worker(dp, bot):
             await call.message.delete()
         except:
             pass
-        await call.message.answer(f"💳 Выберите карту для заявки #{order_id}:", reply_markup=keyboard)
+        await call.message.answer(f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Выберите карту для заявки #{order_id}:", reply_markup=keyboard)
         await call.answer()
 
     @dp.callback_query(F.data.startswith("req_card_"))
@@ -619,7 +625,7 @@ def register_worker(dp, bot):
             await call.message.delete()
         except:
             pass
-        msg = await call.message.answer("🔐 Введите код для клиента одним сообщением:")
+        msg = await call.message.answer(f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Введите код для клиента одним сообщением:")
         await state.update_data(active_order_id=order_id, ask_code_msg_id=msg.message_id)
         await call.answer()
 
@@ -636,7 +642,7 @@ def register_worker(dp, bot):
         )
         if not row:
             await state.clear()
-            return await message.answer("❌ Ошибка: заявка не найдена")
+            return await message.answer(f"<tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Ошибка: заявка не найдена")
 
         user_id = row["user_id"]
         amount = float(row["amount"])
