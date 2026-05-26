@@ -259,7 +259,7 @@ def register_client(dp, bot):
             row = await db.db_fetchone("SELECT * FROM contest WHERE status='active' ORDER BY id DESC LIMIT 1")
             if not row:
                 await bot.send_message(chat_id,
-                    "📊 <b>Конкурс</b>\n\nАктивных конкурсов сейчас нет.",
+                    "<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Конкурс</b>\n\nАктивных конкурсов сейчас нет.",
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
@@ -301,7 +301,11 @@ def register_client(dp, bot):
                 ORDER BY contrib DESC
                 LIMIT 3
             """, row['started_at'], row['started_at'])
-            medals = ["🥇", "🥈", "🥉"]
+            medals = [
+                "<tg-emoji emoji-id='5440539497383087970'>⭐</tg-emoji>",
+                "<tg-emoji emoji-id='5447203607294265305'>⭐</tg-emoji>",
+                "<tg-emoji emoji-id='5453902265922376865'>⭐</tg-emoji>"
+            ]
             prizes = [100, 60, 40]
             top_text = ""
             for i, t in enumerate(top):
@@ -316,13 +320,13 @@ def register_client(dp, bot):
             if not top_text:
                 top_text = "Пока нет участников\n"
             text = (
-                f"📊 <b>Конкурс</b>\n\n"
-                f"🗓 Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
-                f"🎯 Цель: <b>{target:,.0f} RUB</b>\n\n"
-                f"💰 Общий оборот: <b>{current:,.0f} RUB</b>\n"
-                f"📈 Прогресс: <b>{progress:.1f}%</b>\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Конкурс</b>\n\n"
+                f"<tg-emoji emoji-id='5440660757194744323'>🗓</tg-emoji> Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
+                f"<tg-emoji emoji-id='5397782960512444700'>🎯</tg-emoji> Цель: <b>{target:,.0f} RUB</b>\n\n"
+                f"<tg-emoji emoji-id='5231005931550030290'>💰</tg-emoji> Общий оборот: <b>{current:,.0f} RUB</b>\n"
+                f"<tg-emoji emoji-id='5244837092042750681'>📈</tg-emoji> Прогресс: <b>{progress:.1f}%</b>\n"
                 f"{bar}\n\n"
-                f"🏆 <b>Топ участников:</b>\n{top_text}\n"
+                f"<tg-emoji emoji-id='5244590801438138696'>🏆</tg-emoji> <b>Топ участников:</b>\n{top_text}\n"
                 f"<blockquote>В зачёт идут рефералы с оборотом от 10 USDT</blockquote>"
             )
             await bot.send_message(chat_id, text, parse_mode="HTML",
