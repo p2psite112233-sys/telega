@@ -20,6 +20,7 @@ from handlers.chat import register_chat
 from handlers.withdraw import register_withdraw
 from handlers.transfer import register_transfer
 from handlers.phone import register_phone
+from handlers.cancel import register_cancel
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -27,6 +28,7 @@ dp = Dispatcher()
 # Порядок важен!
 register_admin(dp, bot)
 register_dispute(dp, bot)  # Спор первым — FSM фото
+register_cancel(dp, bot)   # Отмена по согласию
 register_chat(dp, bot)
 register_client(dp, bot)
 register_apply(dp, bot)
