@@ -477,24 +477,73 @@ def register_admin(dp, bot: Bot):
     async def contest_menu(call: types.CallbackQuery):
         row = await db.db_fetchone("SELECT * FROM contest WHERE status='active' ORDER BY id DESC LIMIT 1")
         if row:
-            turnover = await db.db_fetchone(
-                "SELECT SUM(amount) as total FROM orders WHERE status IN ('DONE','SUCCESS','COMPLETED') AND created_at >= $1",
-                row['started_at']
-            )
+            turnover = await db.db_fetchone("""
+                SELECT SUM(o.amount) as total
+                FROM orders o
+                JOIN referrals r ON o.user_id = r.referred_id
+                WHERE o.status IN ('DONE','SUCCESS','COMPLETED')
+                  AND o.created_at >= $1
+                  AND r.referred_id IN (
+                      SELECT o2.user_id
+                      FROM orders o2
+                      WHERE o2.status IN ('DONE','SUCCESS','COMPLETED')
+                        AND o2.created_at >= $1
+                      GROUP BY o2.user_id
+                      HAVING SUM(o2.total_usdt) >= 10
+                  )
+            """, row['started_at'], row['started_at'])
             current = float(turnover['total'] or 0)
             target = float(row['target_rub'])
             progress = min(current / target * 100, 100) if target > 0 else 0
             bar_filled = int(progress / 10)
             bar = "🟩" * bar_filled + "⬜" * (10 - bar_filled)
+
+            top = await db.db_fetchall("""
+                SELECT r.referrer_id, SUM(o.amount) as contrib
+                FROM orders o
+                JOIN referrals r ON o.user_id = r.referred_id
+                WHERE o.status IN ('DONE','SUCCESS','COMPLETED')
+                  AND o.created_at >= $1
+                  AND r.referred_id IN (
+                      SELECT o2.user_id
+                      FROM orders o2
+                      WHERE o2.status IN ('DONE','SUCCESS','COMPLETED')
+                        AND o2.created_at >= $1
+                      GROUP BY o2.user_id
+                      HAVING SUM(o2.total_usdt) >= 10
+                  )
+                GROUP BY r.referrer_id
+                ORDER BY contrib DESC
+                LIMIT 3
+            """, row['started_at'], row['started_at'])
+
+            medals = ["🥇", "🥈", "🥉"]
+            prizes = [100, 60, 40]
+            top_text = ""
+            for i, t in enumerate(top):
+                uid_top = t['referrer_id']
+                contrib = float(t['contrib'] or 0)
+                try:
+                    chat = await bot.get_chat(uid_top)
+                    name = f"@{chat.username}" if chat.username else f"ID: {uid_top}"
+                except:
+                    name = f"ID: {uid_top}"
+                top_text += f"{medals[i]} {name} — {contrib:,.0f} RUB (+{prizes[i]} USDT)\n"
+
+            if not top_text:
+                top_text = "Пока нет участников\n"
+
             text = (
                 f"📊 <b>Конкурс активен</b>\n\n"
                 f"🗓 Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
                 f"🎯 Цель: <b>{target:,.0f} RUB</b>\n\n"
                 f"💰 Текущий оборот: <b>{current:,.0f} RUB</b>\n"
                 f"📈 Прогресс: <b>{progress:.1f}%</b>\n"
-                f"{bar}"
+                f"{bar}\n\n"
+                f"🏆 <b>Топ участников:</b>\n{top_text}"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Обновить", callback_data="adm_contest")],
                 [InlineKeyboardButton(text="🛑 Остановить конкурс", callback_data="adm_contest_stop")],
                 [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
             ])
