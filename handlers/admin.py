@@ -487,7 +487,7 @@ def register_admin(dp, bot: Bot):
                       SELECT o2.user_id
                       FROM orders o2
                       WHERE o2.status IN ('DONE','SUCCESS','COMPLETED')
-                        AND o2.created_at >= $1
+                        AND o2.created_at >= $2
                       GROUP BY o2.user_id
                       HAVING SUM(o2.total_usdt) >= 10
                   )
@@ -508,7 +508,7 @@ def register_admin(dp, bot: Bot):
                       SELECT o2.user_id
                       FROM orders o2
                       WHERE o2.status IN ('DONE','SUCCESS','COMPLETED')
-                        AND o2.created_at >= $1
+                        AND o2.created_at >= $2
                       GROUP BY o2.user_id
                       HAVING SUM(o2.total_usdt) >= 10
                   )
@@ -589,7 +589,7 @@ def register_admin(dp, bot: Bot):
             target = float(message.text.strip().replace(",", "").replace(" ", ""))
             if target <= 0: raise ValueError
         except:
-            return await message.answer("<tg-emoji emoji-id='5210952531676504517'>❌</tg-emoji> Введите корректную сумму (например: 1000000)")
+            return await message.answer("<tg-emoji emoji-id='5210952531676504517'>❌</tg-emoji> Введите корректную сумму (например: 1000000)", parse_mode="HTML")
         await db.db_execute(
             "INSERT INTO contest (target_rub, status) VALUES ($1, 'active')", target
         )
