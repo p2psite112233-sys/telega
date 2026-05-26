@@ -26,7 +26,7 @@ def order_info(order_id: int, amount: float, total_usdt: float, unique: bool = F
         f"▸ <tg-emoji emoji-id='5190806721286657692'>📊</tg-emoji> Итого к зачислению: {worker_total_usdt:.4f} USDT\n"
         f"▸ <tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> Средства зарезервированы"
     )
-    
+
 def order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_card, bank="", name=""):
     commission = max(round(amount * 0.20, 2), 30)
     total_rub = round(amount + commission, 2)
@@ -43,7 +43,7 @@ def order_info_transfer(order_id, amount, total_usdt, transfer_type, phone_or_ca
         type_label = "Перевод по номеру карты"
         req = f"▸ 💳 <code>{phone_or_card}</code>"
         extra = f"▸ 🏦 {bank}\n▸ 👤 {name}\n"
-    else:  # phone
+    else:
         type_label = "Пополнение номера"
         req = f"▸ 📱 <code>{phone_or_card}</code>"
         extra = ""
@@ -211,7 +211,6 @@ def register_chat(dp, bot):
         status = row["status"]
         transfer_type = row["transfer_type"]
 
-        # Завершена
         if status == "DONE":
             client_balance_new = await db.get_balance(uid)
             if transfer_type == "sbp":
@@ -267,7 +266,6 @@ def register_chat(dp, bot):
                 ]))
             return await call.answer()
 
-        # Отменена
         if status == "CANCELLED":
             await bot.send_message(uid,
                 f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id}</b> · <tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Заявка отменена",
@@ -277,7 +275,6 @@ def register_chat(dp, bot):
                 ]))
             return await call.answer()
 
-        # Спор
         if status == "DISPUTE":
             from handlers.dispute import build_dispute_msg, dispute_client_kb
             reason = row["dispute_reason"] or "—"
@@ -290,11 +287,13 @@ def register_chat(dp, bot):
                                   transfer_bank=row["transfer_bank"] or "",
                                   transfer_name=row["transfer_recipient_name"] or ""),
                 parse_mode="HTML",
-                reply_markup=dispute_client_kb(order_id, transfer_type=transfer_type)
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    *dispute_client_kb(order_id, transfer_type=transfer_type).inline_keyboard,
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")]
+                ])
             )
             return await call.answer()
 
-        # phone — в работе
         if transfer_type == "phone":
             phone = row["transfer_phone"] or ""
             text = (
@@ -307,12 +306,12 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"client_paid_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
             await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
             return await call.answer()
 
-        # СБП или перевод по карте — в работе
         if transfer_type in ("sbp", "card"):
             phone_or_card = row["transfer_phone"] or ""
             bank = row["transfer_bank"] or ""
@@ -336,12 +335,13 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="✅ Перевод получен", callback_data=f"client_paid_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
             await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
             return await call.answer()
 
-        # Карта под оплату — в работе
+        # Карта под оплату
         card_block = f"<tg-emoji emoji-id='5444856076954520455'>📋</tg-emoji> Реквизиты для оплаты:\n{card_data}\n\n" if card_data else ""
         code_block = f"<tg-emoji emoji-id='5397782960512444700'>🔑</tg-emoji> Код подтверждения: <code>{code}</code>\n\n" if code else ""
         if code:
@@ -350,6 +350,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         elif card_data:
@@ -358,6 +359,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         else:
@@ -371,6 +373,7 @@ def register_chat(dp, bot):
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
             ])
         text = (
@@ -410,7 +413,6 @@ def register_chat(dp, bot):
         is_unique = row["is_unique"] or False
         transfer_type = row["transfer_type"]
 
-        # Завершена
         if status == "DONE":
             commission = max(round(amount * 0.20, 2), 30)
             total_rub = round(amount + commission, 2)
@@ -482,7 +484,6 @@ def register_chat(dp, bot):
                 ]))
             return await call.answer()
 
-        # Отменена
         if status == "CANCELLED":
             await bot.send_message(uid,
                 f"<tg-emoji emoji-id='5456140674028019486'>⚡️</tg-emoji> <b>#{order_id}</b> · <tg-emoji emoji-id='5278578973595427038'>❌</tg-emoji> Заявка отменена",
@@ -492,7 +493,6 @@ def register_chat(dp, bot):
                 ]))
             return await call.answer()
 
-        # Спор
         if status == "DISPUTE":
             from handlers.dispute import build_dispute_msg
             worker_kb = []
@@ -503,6 +503,7 @@ def register_chat(dp, bot):
                     worker_kb.append([InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")])
                 worker_kb.append([InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")])
             worker_kb.append([InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")])
+            worker_kb.append([InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")])
             worker_kb.append([InlineKeyboardButton(text="🆘 Поддержка", url="https://t.me/usudhsuhd")])
             worker_kb.append([InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")])
             await bot.send_message(
@@ -518,7 +519,6 @@ def register_chat(dp, bot):
             )
             return await call.answer()
 
-        # phone — в работе для воркера
         if transfer_type == "phone":
             phone = row["transfer_phone"] or ""
             commission = max(round(amount * 0.20, 2), 30)
@@ -541,12 +541,12 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
             await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
             return await call.answer()
 
-        # СБП или перевод по карте — в работе
         if transfer_type in ("sbp", "card"):
             phone_or_card = row["transfer_phone"] or ""
             bank = row["transfer_bank"] or ""
@@ -556,12 +556,12 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="✅ Перевод выполнен", callback_data=f"sbp_done_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
             await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
             return await call.answer()
 
-        # Карта под оплату — в работе
         if code:
             text = (
                 f"{order_info(order_id, amount, total_usdt, unique=is_unique)}\n\n"
@@ -572,6 +572,7 @@ def register_chat(dp, bot):
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         elif code_req_flag:
@@ -584,6 +585,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         elif card_data:
@@ -596,6 +598,7 @@ def register_chat(dp, bot):
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         else:
@@ -604,6 +607,7 @@ def register_chat(dp, bot):
                 [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         await bot.send_message(uid, text, parse_mode="HTML", reply_markup=kb)
