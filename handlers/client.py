@@ -32,6 +32,7 @@ CLIENT_MENU_KEYBOARD = InlineKeyboardMarkup(inline_keyboard=[
         InlineKeyboardButton(text="◾️ Оплата QR-Кода", callback_data="client_qr")
     ],
     [InlineKeyboardButton(text="🤑 Пополнить баланс", callback_data="client_topup")],
+    [InlineKeyboardButton(text="📊 Конкурс", callback_data="contest_view")],
     [
         InlineKeyboardButton(text="🙋‍♂️ Профиль", callback_data="client_profile"),
         InlineKeyboardButton(text="📄 Стать исполнителем", callback_data="client_become_worker")
@@ -229,7 +230,8 @@ def register_client(dp, bot):
             F.data.startswith("card_") |
             F.data.startswith("history_") |
             F.data.startswith("worker_history_") |
-            F.data.startswith("active_order_")
+            F.data.startswith("active_order_") |
+            F.data.startswith("contest_")
         )
         & ~F.data.startswith("client_paid_")
         & ~F.data.startswith("client_card")
@@ -252,6 +254,83 @@ def register_client(dp, bot):
             await call.message.delete()
         except:
             pass
+
+        if call.data == "contest_view":
+            row = await db.db_fetchone("SELECT * FROM contest WHERE status='active' ORDER BY id DESC LIMIT 1")
+            if not row:
+                await bot.send_message(chat_id,
+                    "📊 <b>Конкурс</b>\n\nАктивных конкурсов сейчас нет.",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+                    ]))
+                return await call.answer()
+            turnover = await db.db_fetchone("""
+                SELECT SUM(o.amount) as total
+                FROM orders o
+                JOIN referrals r ON o.user_id = r.referred_id
+                WHERE o.status IN ('DONE','SUCCESS','COMPLETED')
+                  AND o.created_at >= $1
+                  AND r.referred_id IN (
+                      SELECT o2.user_id FROM orders o2
+                      WHERE o2.status IN ('DONE','SUCCESS','COMPLETED')
+                        AND o2.created_at >= $2
+                      GROUP BY o2.user_id
+                      HAVING SUM(o2.total_usdt) >= 10
+                  )
+            """, row['started_at'], row['started_at'])
+            current = float(turnover['total'] or 0)
+            target = float(row['target_rub'])
+            progress = min(current / target * 100, 100) if target > 0 else 0
+            bar_filled = int(progress / 10)
+            bar = "🟩" * bar_filled + "⬜" * (10 - bar_filled)
+            top = await db.db_fetchall("""
+                SELECT r.referrer_id, SUM(o.amount) as contrib
+                FROM orders o
+                JOIN referrals r ON o.user_id = r.referred_id
+                WHERE o.status IN ('DONE','SUCCESS','COMPLETED')
+                  AND o.created_at >= $1
+                  AND r.referred_id IN (
+                      SELECT o2.user_id FROM orders o2
+                      WHERE o2.status IN ('DONE','SUCCESS','COMPLETED')
+                        AND o2.created_at >= $2
+                      GROUP BY o2.user_id
+                      HAVING SUM(o2.total_usdt) >= 10
+                  )
+                GROUP BY r.referrer_id
+                ORDER BY contrib DESC
+                LIMIT 3
+            """, row['started_at'], row['started_at'])
+            medals = ["🥇", "🥈", "🥉"]
+            prizes = [100, 60, 40]
+            top_text = ""
+            for i, t in enumerate(top):
+                uid_top = t['referrer_id']
+                contrib = float(t['contrib'] or 0)
+                try:
+                    chat = await bot.get_chat(uid_top)
+                    name = f"@{chat.username}" if chat.username else f"ID: {uid_top}"
+                except:
+                    name = f"ID: {uid_top}"
+                top_text += f"{medals[i]} {name} — {contrib:,.0f} RUB (+{prizes[i]} USDT)\n"
+            if not top_text:
+                top_text = "Пока нет участников\n"
+            text = (
+                f"📊 <b>Конкурс</b>\n\n"
+                f"🗓 Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
+                f"🎯 Цель: <b>{target:,.0f} RUB</b>\n\n"
+                f"💰 Общий оборот: <b>{current:,.0f} RUB</b>\n"
+                f"📈 Прогресс: <b>{progress:.1f}%</b>\n"
+                f"{bar}\n\n"
+                f"🏆 <b>Топ участников:</b>\n{top_text}\n"
+                f"<blockquote>В зачёт идут рефералы с оборотом от 10 USDT</blockquote>"
+            )
+            await bot.send_message(chat_id, text, parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔄 Обновить", callback_data="contest_view")],
+                    [InlineKeyboardButton(text="🏠 В меню", callback_data="client_back_menu")]
+                ]))
+            return await call.answer()
 
         if call.data == "client_become_worker":
             await bot.send_message(
@@ -345,7 +424,8 @@ def register_client(dp, bot):
                 [InlineKeyboardButton(text="💸 Вывод средств", callback_data="lk_withdraw")],
                 [InlineKeyboardButton(text="🟢 Активные заявки", callback_data="lk_active"),
                  InlineKeyboardButton(text="📚 История заявок", callback_data="lk_history")],
-                [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")]
+                [InlineKeyboardButton(text="💳 Управление картами", callback_data="lk_cards")],
+                [InlineKeyboardButton(text="📊 Конкурс", callback_data="contest_view")]
             ])
             await bot.send_photo(chat_id, photo=PROFILE_BANNER_FILE_ID, caption=text, reply_markup=keyboard, parse_mode="HTML")
             return await call.answer()
@@ -411,7 +491,7 @@ def register_client(dp, bot):
         if call.data.startswith("active_order_"):
             order_id = int(call.data.split("_")[2])
             await bot.send_message(
-                chat_id,f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...",
+                chat_id, f"<tg-emoji emoji-id='5197269100878907942'>📄</tg-emoji> Открываю заявку...",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📄 Посмотреть заявку", callback_data=f"chat_view_order_{order_id}")]
                 ])
