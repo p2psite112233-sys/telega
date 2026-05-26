@@ -50,7 +50,7 @@ def order_info_transfer(order_id: int, amount: float, total_usdt: float, transfe
         type_label = "Перевод по номеру карты"
         req = f"▸ <tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> <code>{phone_or_card}</code>"
         extra = f"▸ <tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> {bank}\n▸ <tg-emoji emoji-id='5275979556308674886'>👤</tg-emoji> {name}\n"
-    else:  # phone
+    else:
         type_label = "Пополнение номера"
         req = f"▸ <tg-emoji emoji-id='5278304890257436355'>📱</tg-emoji> <code>{phone_or_card}</code>"
         extra = ""
@@ -269,6 +269,7 @@ def register_worker(dp, bot):
                     [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"client_paid_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -290,6 +291,7 @@ def register_worker(dp, bot):
                     [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"sbp_done_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
                 ])
             )
@@ -306,12 +308,12 @@ def register_worker(dp, bot):
                     f"▸ <tg-emoji emoji-id='5275979556308674886'>👨‍💻</tg-emoji> Исполнитель назначен\n"
                     f"▸ <tg-emoji emoji-id='5276412364458059956'>⏳</tg-emoji> Реквизиты готовятся\n\n"
                     f"<tg-emoji emoji-id='5276395476646653290'>💬</tg-emoji> Скоро исполнитель отправит реквизиты для оплаты"
-                    
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="❌ Отменить заявку", callback_data=f"cancel_order_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -333,6 +335,7 @@ def register_worker(dp, bot):
                     [InlineKeyboardButton(text="💳 Отправить реквизиты", callback_data=f"send_req_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
                 ])
             )
@@ -379,6 +382,7 @@ def register_worker(dp, bot):
                     [InlineKeyboardButton(text="✅ Выполнено", callback_data=f"client_paid_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -413,6 +417,7 @@ def register_worker(dp, bot):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
@@ -472,11 +477,11 @@ def register_worker(dp, bot):
         is_unique = order["is_unique"] or False
 
         card_data = (
-    f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> Банк: {card['bank']}\n"
-    f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Номер карты: <code>{card['card_number']}</code>\n"
-    f"<tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> Срок: {card['expiry']}\n"
-    f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> CVV: <code>{card['cvv']}</code>"
-)
+            f"<tg-emoji emoji-id='5332455502917949981'>🏦</tg-emoji> Банк: {card['bank']}\n"
+            f"<tg-emoji emoji-id='5445353829304387411'>💳</tg-emoji> Номер карты: <code>{card['card_number']}</code>\n"
+            f"<tg-emoji emoji-id='5274055917766202507'>📅</tg-emoji> Срок: {card['expiry']}\n"
+            f"<tg-emoji emoji-id='5443127283898405358'>🔐</tg-emoji> CVV: <code>{card['cvv']}</code>"
+        )
         await db.db_execute("UPDATE orders SET dispute_card_data=$1 WHERE id=$2", card_data, order_id)
 
         if status == "DISPUTE":
@@ -501,6 +506,7 @@ def register_worker(dp, bot):
                     [InlineKeyboardButton(text="🔑 Запросить код", callback_data=f"request_code_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -520,6 +526,7 @@ def register_worker(dp, bot):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
@@ -581,6 +588,7 @@ def register_worker(dp, bot):
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -604,6 +612,7 @@ def register_worker(dp, bot):
                 [InlineKeyboardButton(text="📥 Отправить код", callback_data=f"send_code_{order_id}")],
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
@@ -684,6 +693,7 @@ def register_worker(dp, bot):
                     [InlineKeyboardButton(text="✅ Оплата прошла", callback_data=f"client_paid_{order_id}")],
                     [InlineKeyboardButton(text="🆘 Спор", callback_data=f"dispute_{order_id}")],
                     [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                    [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                     [InlineKeyboardButton(text="🏠 Домой", callback_data="client_back_menu")]
                 ])
             )
@@ -711,6 +721,7 @@ def register_worker(dp, bot):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🆘 Спор", callback_data=f"worker_dispute_{order_id}")],
                 [InlineKeyboardButton(text="📄 Написать сообщение", callback_data=f"chat_write_{order_id}")],
+                [InlineKeyboardButton(text="❌ Запросить отмену", callback_data=f"cancel_req_{order_id}")],
                 [InlineKeyboardButton(text="🏠 Домой", callback_data="lk_home")]
             ])
         )
