@@ -517,7 +517,11 @@ def register_admin(dp, bot: Bot):
                 LIMIT 3
             """, row['started_at'], row['started_at'])
 
-            medals = ["🥇", "🥈", "🥉"]
+            medals = [
+                "<tg-emoji emoji-id='5440539497383087970'>⭐</tg-emoji>",
+                "<tg-emoji emoji-id='5447203607294265305'>⭐</tg-emoji>",
+                "<tg-emoji emoji-id='5453902265922376865'>⭐</tg-emoji>"
+            ]
             prizes = [100, 60, 40]
             top_text = ""
             for i, t in enumerate(top):
@@ -534,13 +538,13 @@ def register_admin(dp, bot: Bot):
                 top_text = "Пока нет участников\n"
 
             text = (
-                f"📊 <b>Конкурс активен</b>\n\n"
-                f"🗓 Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
-                f"🎯 Цель: <b>{target:,.0f} RUB</b>\n\n"
-                f"💰 Текущий оборот: <b>{current:,.0f} RUB</b>\n"
-                f"📈 Прогресс: <b>{progress:.1f}%</b>\n"
+                f"<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Конкурс активен</b>\n\n"
+                f"<tg-emoji emoji-id='5440660757194744323'>🗓</tg-emoji> Старт: <b>{row['started_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
+                f"<tg-emoji emoji-id='5397782960512444700'>🎯</tg-emoji> Цель: <b>{target:,.0f} RUB</b>\n\n"
+                f"<tg-emoji emoji-id='5231005931550030290'>💰</tg-emoji> Текущий оборот: <b>{current:,.0f} RUB</b>\n"
+                f"<tg-emoji emoji-id='5244837092042750681'>📈</tg-emoji> Прогресс: <b>{progress:.1f}%</b>\n"
                 f"{bar}\n\n"
-                f"🏆 <b>Топ участников:</b>\n{top_text}"
+                f"<tg-emoji emoji-id='5244590801438138696'>🏆</tg-emoji> <b>Топ участников:</b>\n{top_text}"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🔄 Обновить", callback_data="adm_contest")],
@@ -548,7 +552,7 @@ def register_admin(dp, bot: Bot):
                 [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
             ])
         else:
-            text = "📊 <b>Конкурс</b>\n\nАктивных конкурсов нет."
+            text = "<tg-emoji emoji-id='5231200819986047254'>📊</tg-emoji> <b>Конкурс</b>\n\nАктивных конкурсов нет."
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🚀 Запустить конкурс", callback_data="adm_contest_start")],
                 [InlineKeyboardButton(text="⏪ Назад", callback_data="adm_back_to_main")]
@@ -572,7 +576,7 @@ def register_admin(dp, bot: Bot):
     async def contest_start_prompt(call: types.CallbackQuery, state: FSMContext):
         await state.set_state(AdminStates.waiting_for_contest_target)
         await call.message.edit_text(
-            "🎯 Введите целевой оборот конкурса в RUB (число):",
+            "<tg-emoji emoji-id='5397782960512444700'>🎯</tg-emoji> Введите целевой оборот конкурса в RUB (число):",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Отмена", callback_data="adm_contest")]
             ])
@@ -585,13 +589,13 @@ def register_admin(dp, bot: Bot):
             target = float(message.text.strip().replace(",", "").replace(" ", ""))
             if target <= 0: raise ValueError
         except:
-            return await message.answer("❌ Введите корректную сумму (например: 1000000)")
+            return await message.answer("<tg-emoji emoji-id='5210952531676504517'>❌</tg-emoji> Введите корректную сумму (например: 1000000)")
         await db.db_execute(
             "INSERT INTO contest (target_rub, status) VALUES ($1, 'active')", target
         )
         await state.clear()
         await message.answer(
-            f"✅ Конкурс запущен! Цель: <b>{target:,.0f} RUB</b>",
+            f"<tg-emoji emoji-id='5206607081334906820'>✅</tg-emoji> Конкурс запущен! Цель: <b>{target:,.0f} RUB</b>",
             parse_mode="HTML"
         )
         await send_admin_menu(message)
